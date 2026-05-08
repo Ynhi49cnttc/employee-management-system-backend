@@ -6,7 +6,7 @@ const getAllEmployees = async (req, res) => {
     try {
         const result = await db.executeSP('sp_HRManager_XemTatCaNhanVien', [], req.user);
 
-        res.status(200).json(result[0] || []);
+        res.status(200).json(result || []);
     } catch (error) {
         console.error('Lỗi lấy danh sách:', error);
         res.status(500).json({ message: 'Lỗi server khi lấy danh sách nhân viên', error: error.message });
@@ -46,7 +46,7 @@ const addEmployeeHRM = async (req, res) => {
 const getAuditLogs = async (req, res) => {
     try {
         const result = await db.executeSP('sp_HRManager_XemNhatKy', [], req.user);
-        res.status(200).json(result[0] || []);
+        res.status(200).json(result || []);
     } catch (error) {
         res.status(500).json({ message: 'Lỗi lấy nhật ký', error: error.message });
     }

@@ -19,4 +19,7 @@ app.use('/api/employee', employeeRoutes);
 const hrRoutes = require('./routes/hrRoutes');
 app.use('/api/hr', hrRoutes);
 
+const adminRoutes = require('./routes/adminRoutes');
+app.use('/api/admin', adminRoutes);
+
 module.exports = app;
