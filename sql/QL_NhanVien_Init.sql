@@ -1,19 +1,12 @@
--- ============================================================
--- HE THONG QUAN LY NHAN VIEN - SCRIPT DA SUA TOAN BO LOI
--- ============================================================
--- LOI DA SUA:
---   [1] IF NOT EXISTS cua 5 role deu check sai 'Role_Manager'
---   [2] fn_GetCurrentMaNV() khai bao SAU cac SP dung no
---   [3] Thieu fn_GetCurrentRole() nhung cac SP da goi
---   [4] Luong VARBINARY(MAX) nhung seed data la so nguyen
---   [5] Nhieu CREATE PROCEDURE thieu GO nen loi batch
---   [6] sp_HR_UpdateNhanVien: COALESCE(Luong) khong hoat dong
---       voi VARBINARY - da doi kieu ve DECIMAL(18,2)
---   [7] sp_Admin_TaoTaiKhoan thieu phan DENY/GRANT
---   [8] Test 4 goi sai ten SP (sp_Manager_XemLuongPhong)
--- ============================================================
-
 USE master;
+GO
+
+-- Drop database 
+IF DB_ID('QL_NHANVIEN') IS NOT NULL
+BEGIN
+    ALTER DATABASE QL_NHANVIEN SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+    DROP DATABASE QL_NHANVIEN;
+END
 GO
 
 -- ============================================================
@@ -193,12 +186,8 @@ IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'Role_HR_Manag
     CREATE ROLE Role_HR_Manager;
 GO
 
-IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'Role_Admin' AND type = 'R')
-    CREATE ROLE Role_Admin;
-GO
-
 -- ============================================================
--- BUOC 7: Tao Login va User (dung chung 1 login test)
+-- BUOC 7: Tao Login va User (dung chung 1 login test cho Backend)
 -- ============================================================
 USE master;
 GO
@@ -211,23 +200,37 @@ GO
 USE QL_NHANVIEN;
 GO
 
-IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'user_employee')
-    CREATE USER user_employee FOR LOGIN test_login;
-GO
-IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'user_manager')
-    CREATE USER user_manager FOR LOGIN test_login;
-GO
-IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'user_finance')
-    CREATE USER user_finance FOR LOGIN test_login;
-GO
-IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'user_hr_staff')
-    CREATE USER user_hr_staff FOR LOGIN test_login;
-GO
-IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'user_hr_manager')
-    CREATE USER user_hr_manager FOR LOGIN test_login;
+-- 7.1 Tạo 1 User chính thức cho Backend (Node.js) kết nối
+IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'test_user')
+    CREATE USER test_user FOR LOGIN test_login;
 GO
 
--- Gan User vao Role
+-- Cấp cho Backend user (test_user) tất cả các Role để gọi được mọi API
+ALTER ROLE Role_Employee    ADD MEMBER test_user;
+ALTER ROLE Role_Manager     ADD MEMBER test_user;
+ALTER ROLE Role_Finance     ADD MEMBER test_user;
+ALTER ROLE Role_HR_Staff    ADD MEMBER test_user;
+ALTER ROLE Role_HR_Manager  ADD MEMBER test_user;
+GO
+
+-- 7.2 Tạo các User "Ảo" (WITHOUT LOGIN) chỉ để dùng cho việc TEST bằng EXECUTE AS USER
+IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'user_employee')
+    CREATE USER user_employee WITHOUT LOGIN;
+GO
+IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'user_manager')
+    CREATE USER user_manager WITHOUT LOGIN;
+GO
+IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'user_finance')
+    CREATE USER user_finance WITHOUT LOGIN;
+GO
+IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'user_hr_staff')
+    CREATE USER user_hr_staff WITHOUT LOGIN;
+GO
+IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'user_hr_manager')
+    CREATE USER user_hr_manager WITHOUT LOGIN;
+GO
+
+-- Gán các User Ảo này vào Role tương ứng để test quyền
 ALTER ROLE Role_Employee    ADD MEMBER user_employee;
 ALTER ROLE Role_Manager     ADD MEMBER user_manager;
 ALTER ROLE Role_Finance     ADD MEMBER user_finance;
@@ -403,21 +406,35 @@ END;
 GO
 
 -- ----------------------------------------------------------
--- SP: Finance - Xem luong toan cong ty (tru phong minh)
+-- SP: Finance - Xem luong toan cong ty 
 -- ----------------------------------------------------------
-IF OBJECT_ID('dbo.sp_Finance_XemLuongCongTy', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_Finance_XemLuongCongTy;
+IF OBJECT_ID('dbo.sp_Finance_XemLuongCongTy', 'P') IS NOT NULL 
+    DROP PROCEDURE dbo.sp_Finance_XemLuongCongTy;
 GO
+
 CREATE PROCEDURE dbo.sp_Finance_XemLuongCongTy
     @MaNV_Input VARCHAR(10)
 AS
 BEGIN
     SET NOCOUNT ON;
+    
+    -- Xac dinh phong ban cua nhan vien Ke toan dang thuc hien truy van
     DECLARE @MaPhongFinance VARCHAR(10);
     SELECT @MaPhongFinance = MaPhong FROM NHANVIEN WHERE MaNV = @MaNV_Input;
 
-    SELECT MaNV, HoTen, NgaySinh, Email, MaPhong, Luong, MaSoThue
-    FROM   NHANVIEN
-    WHERE  MaPhong <> @MaPhongFinance;
+    -- Truy van ket hop mask du lieu (An thong tin khong lien quan)
+    SELECT 
+        MaNV, 
+        -- Nhan vien cung phong Ke toan: Hien thi tat ca. Phong khac: An di (NULL)
+        CASE WHEN MaPhong = @MaPhongFinance THEN HoTen ELSE NULL END AS HoTen,
+        CASE WHEN MaPhong = @MaPhongFinance THEN NgaySinh ELSE NULL END AS NgaySinh,
+        CASE WHEN MaPhong = @MaPhongFinance THEN Email ELSE NULL END AS Email,
+        CASE WHEN MaPhong = @MaPhongFinance THEN MaPhong ELSE NULL END AS MaPhong,
+        
+        -- Luong va MaSoThue thi Ke toan duoc quyen xem cua TOAN CONG TY
+        Luong, 
+        MaSoThue
+    FROM NHANVIEN;
 END;
 GO
 
@@ -688,45 +705,11 @@ END;
 GO
 
 -- ----------------------------------------------------------
--- SP: Admin - Tao tai khoan (them nhan vien + tai khoan)
+-- SP: HRManager - Khoa / Mo tai khoan
 -- ----------------------------------------------------------
-IF OBJECT_ID('dbo.sp_Admin_TaoTaiKhoan', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_Admin_TaoTaiKhoan;
+IF OBJECT_ID('dbo.sp_HRManager_DoiTrangThaiTaiKhoan', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_HRManager_DoiTrangThaiTaiKhoan;
 GO
-CREATE PROCEDURE dbo.sp_Admin_TaoTaiKhoan
-    @MaNV        VARCHAR(10),
-    @HoTen       NVARCHAR(100),
-    @Email       VARCHAR(100)  = NULL,
-    @MaPhong     VARCHAR(10),
-    @TenDangNhap VARCHAR(50),
-    @MatKhau     VARCHAR(100),
-    @MaVaiTro    VARCHAR(10)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    BEGIN TRANSACTION;
-    BEGIN TRY
-        INSERT INTO NHANVIEN (MaNV, HoTen, Email, MaPhong)
-        VALUES (@MaNV, @HoTen, @Email, @MaPhong);
-
-        INSERT INTO TAIKHOAN (TenDangNhap, MatKhauHash, MaNV, MaVaiTro)
-        VALUES (@TenDangNhap, HASHBYTES('SHA2_256', @MatKhau), @MaNV, @MaVaiTro);
-
-        COMMIT TRANSACTION;
-    END TRY
-    BEGIN CATCH
-        ROLLBACK TRANSACTION;
-        DECLARE @Err NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR(@Err, 16, 1);
-    END CATCH
-END;
-GO
-
--- ----------------------------------------------------------
--- SP: Admin - Khoa / Mo tai khoan
--- ----------------------------------------------------------
-IF OBJECT_ID('dbo.sp_Admin_DoiTrangThaiTaiKhoan', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_Admin_DoiTrangThaiTaiKhoan;
-GO
-CREATE PROCEDURE dbo.sp_Admin_DoiTrangThaiTaiKhoan
+CREATE PROCEDURE dbo.sp_HRManager_DoiTrangThaiTaiKhoan
     @TenDangNhap VARCHAR(50),
     @TrangThai   BIT   -- 1 = mo, 0 = khoa
 AS
@@ -737,11 +720,11 @@ END;
 GO
 
 -- ----------------------------------------------------------
--- SP: Admin - Doi vai tro (doi role) cua user
+-- SP: HRManager - Doi vai tro (doi role) cua user
 -- ----------------------------------------------------------
-IF OBJECT_ID('dbo.sp_Admin_DoiVaiTro', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_Admin_DoiVaiTro;
+IF OBJECT_ID('dbo.sp_HRManager_DoiVaiTro', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_HRManager_DoiVaiTro;
 GO
-CREATE PROCEDURE dbo.sp_Admin_DoiVaiTro
+CREATE PROCEDURE dbo.sp_HRManager_DoiVaiTro
     @TenDangNhap VARCHAR(50),
     @MaVaiTroMoi VARCHAR(10)
 AS
@@ -757,11 +740,11 @@ END;
 GO
 
 -- ----------------------------------------------------------
--- SP: Admin - Xem danh sach tai khoan
+-- SP: HRManager - Xem danh sach tai khoan
 -- ----------------------------------------------------------
-IF OBJECT_ID('dbo.sp_Admin_XemTaiKhoan', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_Admin_XemTaiKhoan;
+IF OBJECT_ID('dbo.sp_HRManager_XemTaiKhoan', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_HRManager_XemTaiKhoan;
 GO
-CREATE PROCEDURE dbo.sp_Admin_XemTaiKhoan
+CREATE PROCEDURE dbo.sp_HRManager_XemTaiKhoan
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -872,13 +855,11 @@ GRANT EXECUTE ON dbo.sp_HRManager_InsertNhanVien      TO Role_HR_Manager;
 GRANT EXECUTE ON dbo.sp_HRManager_UpdateNhanVien      TO Role_HR_Manager;
 GRANT EXECUTE ON dbo.sp_HRManager_DeleteNhanVien      TO Role_HR_Manager;
 GRANT EXECUTE ON dbo.sp_HRManager_XemNhatKy           TO Role_HR_Manager;
-GO
 
--- Role_Admin (toan quyen quan ly tai khoan)
-GRANT EXECUTE ON dbo.sp_Admin_TaoTaiKhoan           TO Role_Admin;
-GRANT EXECUTE ON dbo.sp_Admin_DoiTrangThaiTaiKhoan  TO Role_Admin;
-GRANT EXECUTE ON dbo.sp_Admin_DoiVaiTro             TO Role_Admin;
-GRANT EXECUTE ON dbo.sp_Admin_XemTaiKhoan           TO Role_Admin;
+-- Role_HR_Manager (toan quyen quan ly tai khoan)
+GRANT EXECUTE ON dbo.sp_HRManager_DoiTrangThaiTaiKhoan  TO Role_HR_Manager;
+GRANT EXECUTE ON dbo.sp_HRManager_DoiVaiTro             TO Role_HR_Manager;
+GRANT EXECUTE ON dbo.sp_HRManager_XemTaiKhoan           TO Role_HR_Manager;
 GO
 
 -- ============================================================
@@ -886,24 +867,26 @@ GO
 -- ============================================================
 
 -- Test 1: Kiem tra TDE
--- SELECT DB_NAME(database_id) AS DatabaseName, encryption_state
--- FROM sys.dm_database_encryption_keys WHERE database_id = DB_ID('QL_NHANVIEN');
+--SELECT DB_NAME(database_id) AS DatabaseName, encryption_state
+--FROM sys.dm_database_encryption_keys WHERE database_id = DB_ID('QL_NHANVIEN');
 
 -- Test 2: Bao loi Access Denied
--- EXECUTE AS USER = 'user_employee';
--- SELECT * FROM NHANVIEN;  -- phai bao loi
--- REVERT;
+--EXECUTE AS USER = 'user_employee';
+--SELECT * FROM NHANVIEN;  -- phai bao loi
+--REVERT;
 
 -- Test 3: Employee chi thay chinh minh
--- EXECUTE AS USER = 'user_employee';
--- EXEC dbo.sp_Employee_XemThongTinCaNhan 'NV01';
--- REVERT;
+--EXECUTE AS USER = 'user_employee';
+--EXEC dbo.sp_Employee_XemThongTinCaNhan 'NV01';
+--REVERT;
 
 -- Test 4: Manager xem luong ca phong
--- FIX [8]: sua ten SP dung (sp_Manager_XemNhanVienCungPhong)
 -- EXECUTE AS USER = 'user_manager';
 -- EXEC dbo.sp_Manager_XemNhanVienCungPhong 'NV02';
 -- REVERT;
 
 -- Test 5: Dang nhap
 -- EXEC dbo.sp_Auth_Login 'nv01', '123456';
+
+GRANT EXECUTE ON dbo.sp_Auth_Login TO test_user;
+GO

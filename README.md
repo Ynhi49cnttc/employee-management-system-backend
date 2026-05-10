@@ -1,53 +1,53 @@
-# Employee Management System - Backend
+# Secure Employee Management System - Backend
 
-Dự án Backend cho hệ thống Quản lý Nhân viên, được xây dựng trên nền tảng Node.js và SQL Server, tập trung vào tính bảo mật cao, phân quyền chặt chẽ và ghi nhật ký hệ thống tự động.
+Dự án Backend cho hệ thống Quản lý Nhân viên, được xây dựng trên nền tảng Node.js và SQL Server. Hệ thống tập trung giải quyết bài toán quản lý nhân sự kết hợp với các cơ chế bảo mật cơ sở dữ liệu chuyên sâu.
 
-## Tính năng nổi bật
+## 🌟 Tính năng bảo mật & Nghiệp vụ nổi bật
 
-* **Xác thực & Phân quyền (RBAC):** Sử dụng JSON Web Token (JWT) để quản lý phiên đăng nhập và phân quyền đa cấp (Admin, HR Manager, HR Staff, Finance, Manager, Employee).
-* **Bảo mật dữ liệu (TDE):** Triển khai Transparent Data Encryption (TDE) trên SQL Server để mã hóa toàn bộ cơ sở dữ liệu ở trạng thái nghỉ.
-* **Truy vết hệ thống (Audit Logging):** Hệ thống tự động ghi lại mọi thay đổi dữ liệu (Insert, Update, Delete) thông qua SQL Triggers.
-* **Quản lý ngữ cảnh phiên:** Sử dụng `SESSION_CONTEXT` trong SQL Server để truyền định danh người dùng từ Backend xuống Database, giúp ghi nhật ký chính xác đối tượng thực hiện thao tác.
-* **Bảo mật Stored Procedures:** Toàn bộ logic nghiệp vụ được đóng gói trong Stored Procedures; chặn quyền truy cập trực tiếp vào các bảng nhạy cảm đối với người dùng thông thường.
+* **Xác thực & Phân quyền nhiều lớp (RBAC):** Quản lý truy cập bằng JSON Web Token (JWT). Hệ thống phân định rạch ròi 5 vai trò nghiệp vụ:
+  * `EMP` (Employee): Xem thông tin cá nhân và đồng nghiệp cùng phòng (ẩn lương).
+  * `MAN` (Manager): Quản lý và xem lương nhân sự trong phòng ban.
+  * `FIN` (Finance): Tính lương toàn công ty (chỉ xem Mã NV, Lương, Mã số thuế của phòng khác).
+  * `HR` (HR Staff): Quản lý nhân sự toàn công ty (không được can thiệp người cùng phòng HR).
+  * `HRM` (HR Manager): Toàn quyền quản trị nhân sự, cấp phát/khóa tài khoản, phân quyền và kiểm tra nhật ký hệ thống.
+* **Mã hóa dữ liệu vật lý (TDE):** Triển khai Transparent Data Encryption trên SQL Server, bảo vệ toàn bộ file cơ sở dữ liệu khỏi nguy cơ rò rỉ phần cứng.
+* **Truy vết hệ thống (Audit Logging):** Mọi thao tác Thêm/Sửa/Xóa đều được Trigger ghi lại. Tích hợp `SESSION_CONTEXT` truyền định danh từ Backend xuống CSDL để định danh chính xác người thực hiện.
+* **Phòng chống SQL Injection & Truy cập trái phép:** Giao tiếp hoàn toàn qua Stored Procedures có tham số (`Parameterized Queries`). Đặt lệnh `DENY` chặn truy cập trực tiếp vào các bảng dữ liệu gốc.
 
 ## 🛠 Công nghệ sử dụng
 
-* **Runtime:** Node.js
-* **Framework:** Express.js
-* **Database:** Microsoft SQL Server (MSSQL)
-* **Thư viện kết nối:** `mssql` (với Connection Pool tối ưu hiệu suất)
-* **Bảo mật:** `jsonwebtoken`, `bcryptjs`, `dotenv`, `cors`
-* **Kiểm tra dữ liệu:** `joi`
+* **Môi trường:** Node.js, Express.js
+* **Cơ sở dữ liệu:** Microsoft SQL Server (MSSQL)
+* **Bảo mật & Mã hóa:** `jsonwebtoken` (JWT), `bcryptjs` (Hashing), `dotenv`.
+* **Kết nối DB:** `mssql` (với cơ chế Connection Pool).
 
 ## 📋 Cấu trúc thư mục
 
 ```text
+sql/
+└── QL_NhanVien_Init.sql    # Script khởi tạo DB, TDE, Tables, Roles, Trigger & SPs
 src/
-├── config/             # Cấu hình kết nối Database
-├── controllers/        # Xử lý logic nghiệp vụ API
-├── middlewares/        # Các hàm chặn (Auth, Check Role)
-├── routes/             # Định nghĩa các đầu cuối API
-├── app.js              # Cấu hình Express & Middleware
-└── server.js           # Điểm khởi chạy ứng dụng
-sql/                    # Các kịch bản khởi tạo và phân quyền Database
+├── config/                 # Cấu hình kết nối SQL Server (db.js)
+├── controllers/            # Logic xử lý API cho từng Role (hr, finance, manager...)
+├── middlewares/            # Chốt chặn bảo mật (verifyToken, checkRole)
+├── routes/                 # Định tuyến các Endpoint API
+├── app.js                  # Khởi tạo Express và gắn kết các Router
+└── server.js               # Điểm khởi chạy hệ thống
+.env                        # Chứa các biến môi trường nhạy cảm
 
 ```
 
-## 🚀 Cài đặt & Chạy thử
+## 🚀 Hướng dẫn cài đặt
 
-### 1. Chuẩn bị Cơ sở dữ liệu
+### 1. Khởi tạo Cơ sở dữ liệu
 
 1. Mở SQL Server Management Studio (SSMS).
-2. Chạy lần lượt các file trong thư mục `sql/`:
-* `init.sql`: Khởi tạo Database, bảng và cấu hình TDE.
-* `rbac_employee_procs.sql`: Tạo các Stored Procedures và phân quyền Role.
-* `seed.sql`: Nạp dữ liệu mẫu và tài khoản Admin khởi tạo.
-
-
+2. Mở file `sql/QL_NhanVien_Init.sql`.
+3. Nhấn **Execute (F5)** để hệ thống tự động thiết lập TDE, bảng, quy tắc bảo mật và dữ liệu mẫu.
 
 ### 2. Cấu hình Backend
 
-Tạo file `.env` tại thư mục gốc và nhập các thông tin sau:
+Tạo file `.env` tại thư mục gốc:
 
 ```env
 PORT=5000
@@ -55,33 +55,41 @@ DB_USER=test_login
 DB_PASSWORD=Test@123456
 DB_SERVER=localhost
 DB_NAME=QL_NHANVIEN
-JWT_SECRET=YourSuperSecretKey
+JWT_SECRET=Chuoi_Bao_Mat_JWT_Cua_Ban
 
 ```
 
-### 3. Khởi chạy
+### 3. Khởi chạy Server
 
 ```bash
-# Cài đặt thư viện
 npm install
-
-# Chạy chế độ phát triển (với nodemon)
 npm run dev
 
 ```
 
-## 📡 Danh sách API chính
+## 📡 Danh sách API (Endpoints)
 
-| Phương thức | Endpoint | Mô tả | Quyền truy cập |
-| --- | --- | --- | --- |
-| `POST` | `/api/auth/login` | Đăng nhập hệ thống | Public |
-| `GET` | `/api/employee/profile` | Xem thông tin cá nhân | Đã đăng nhập |
-| `GET` | `/api/hr/all` | Xem danh sách nhân viên | HR Manager |
-| `POST` | `/api/hr/add` | Thêm nhân viên mới | HR Manager |
-| `GET` | `/api/hr/logs` | Xem nhật ký hệ thống | HR Manager |
-| `GET` | `/api/admin/accounts` | Quản lý danh sách tài khoản | Admin |
-| `PUT` | `/api/admin/accounts/status` | Khóa/Mở tài khoản | Admin |
+| Nhóm | Phương thức | Endpoint | Chức năng | Quyền yêu cầu |
+| --- | --- | --- | --- | --- |
+| **Auth** | `POST` | `/api/auth/login` | Đăng nhập hệ thống & nhận Token | Public |
+| **Employee** | `GET` | `/api/employee/profile` | Xem hồ sơ cá nhân | Đã đăng nhập |
+|  | `GET` | `/api/employee/peers` | Xem đồng nghiệp cùng phòng (ẩn lương) | Đã đăng nhập |
+| **Manager** | `GET` | `/api/manager/department` | Xem toàn bộ nhân sự phòng mình | `MAN` |
+| **Finance** | `GET` | `/api/finance/salary` | Xem bảng tính lương toàn công ty | `FIN` |
+| **HR Staff** | `GET` | `/api/hr-staff/others` | Xem nhân sự công ty (trừ phòng HR) | `HR` |
+|  | `PUT` | `/api/hr-staff/update/:MaNV` | Sửa nhân sự công ty (trừ phòng HR) | `HR` |
+| **HR Manager** | `GET` | `/api/hr/all` | Xem toàn bộ nhân sự công ty | `HRM` |
+|  | `POST` | `/api/hr/add` | Thêm nhân viên & Cấp tài khoản | `HRM` |
+|  | `PUT` | `/api/hr/update/:MaNV` | Cập nhật thông tin bất kỳ ai | `HRM` |
+|  | `DELETE` | `/api/hr/delete/:MaNV` | Xóa nhân viên & Thu hồi tài khoản | `HRM` |
+|  | `GET` | `/api/hr/accounts` | Quản lý danh sách tài khoản đăng nhập | `HRM` |
+|  | `PUT` | `/api/hr/accounts/status` | Khóa / Mở khóa tài khoản | `HRM` |
+|  | `PUT` | `/api/hr/accounts/role` | Cấp phát / Đổi vai trò (Role) | `HRM` |
+|  | `GET` | `/api/hr/logs` | Xem nhật ký hệ thống (Audit Log) | `HRM` |
+
+## 👤 Thông tin thực hiện
+* **Đơn vị:** Khoa Công nghệ thông tin - Đại học Sư phạm TP.HCM (HCMUE)
 
 ---
 
-*Dự án được phát triển phục vụ mục đích học tập và nghiên cứu môn bảo mật cơ sở dữ liệu.*
+*Dự án phục vụ mục đích đồ án học phần: Bảo mật cơ sở dữ liệu.*
