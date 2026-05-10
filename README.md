@@ -88,6 +88,7 @@ npm run dev
 |  | `GET` | `/api/hr/logs` | Xem nhật ký hệ thống (Audit Log) | `HRM` |
 
 ## 👤 Thông tin thực hiện
+* **Nhóm:** 5
 * **Đơn vị:** Khoa Công nghệ thông tin - Đại học Sư phạm TP.HCM (HCMUE)
 
 ---
