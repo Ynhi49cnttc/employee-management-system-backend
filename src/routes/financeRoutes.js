@@ -3,7 +3,7 @@ const router = express.Router();
 const financeController = require('../controllers/financeController');
 const { verifyToken, checkRole } = require('../middlewares/authMiddleware');
 
-// Chỉ Role Kế toán (FIN) mới được truy cập
-router.get('/salary', verifyToken, checkRole(['FIN']), financeController.getCompanySalary);
+// FIN xem bảng lương. HRM cũng được mở để frontend HRM vào trang bảng lương.
+router.get('/salary', verifyToken, checkRole(['FIN', 'HRM']), financeController.getCompanySalary);
 
 module.exports = router;
