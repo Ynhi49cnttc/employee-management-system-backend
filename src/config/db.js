@@ -8,8 +8,9 @@ const dbConfig = {
     server: process.env.DB_SERVER,
     database: process.env.DB_NAME,
     options: {
-        encrypt: true, // Tùy chọn bảo mật (thường dùng cho Azure SQL)
-        trustServerCertificate: true // Rất quan trọng khi chạy Local để không bị lỗi chứng chỉ SSL
+        encrypt: true, 
+        trustServerCertificate: true,
+        useUTC: false
     }
 };
 
@@ -33,14 +34,12 @@ const poolPromise = new sql.ConnectionPool(dbConfig)
  */
 const executeSP = async (spName, params = [], userContext = null) => {
     const pool = await poolPromise;
-    
-    // Sử dụng Transaction để đảm bảo sp_set_session_context và SP nghiệp vụ chạy trên cùng 1 session
+ 
     const transaction = new sql.Transaction(pool);
 
     try {
         await transaction.begin();
 
-        // 1. Cài đặt ngữ cảnh người dùng (SESSION_CONTEXT) cho Trigger ghi Log
         if (userContext && userContext.MaNV) {
             const contextReq = new sql.Request(transaction);
             contextReq.input('ContextMaNV', sql.VarChar(10), userContext.MaNV);
@@ -52,24 +51,19 @@ const executeSP = async (spName, params = [], userContext = null) => {
             `);
         }
 
-        // 2. Thực thi Stored Procedure chính
         const spReq = new sql.Request(transaction);
-        
-        // Nạp các tham số truyền vào
+
         params.forEach(param => {
             spReq.input(param.name, param.type, param.value);
         });
 
         const result = await spReq.execute(spName);
 
-        // 3. Commit nếu mọi thứ thành công
         await transaction.commit();
         
-        // Trả về recordset (danh sách data) nếu SP có lệnh SELECT, nếu không sẽ undefined
         return result.recordset || result.recordsets || true;
 
     } catch (error) {
-        // Rollback nếu có bất kỳ lỗi gì (Lỗi T-SQL RAISERROR cũng sẽ nhảy vào đây)
         await transaction.rollback();
         throw error; 
     }

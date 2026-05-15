@@ -1,12 +1,15 @@
 USE master;
 GO
-
--- Drop database 
+-- drop database 
 IF DB_ID('QL_NHANVIEN') IS NOT NULL
 BEGIN
     ALTER DATABASE QL_NHANVIEN SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
     DROP DATABASE QL_NHANVIEN;
 END
+GO
+-- drop certificate
+IF EXISTS (SELECT 1 FROM sys.certificates WHERE name = 'TDECer_QLNhanVien')
+    DROP CERTIFICATE TDECer_QLNhanVien;
 GO
 
 -- ============================================================
@@ -54,106 +57,92 @@ GO
 -- ============================================================
 -- BUOC 4: Tao cac bang 
 -- ============================================================
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'PHONGBAN')
-BEGIN
-    CREATE TABLE PHONGBAN (
-        MaPhong      VARCHAR(10)   PRIMARY KEY,
-        TenPhong     NVARCHAR(100) NOT NULL,
-        MaTruongPhong VARCHAR(10)  NULL
-    );
-END
+CREATE TABLE PHONGBAN (
+    MaPhong        VARCHAR(10) PRIMARY KEY,
+    TenPhong       NVARCHAR(100) NOT NULL,
+    MaTruongPhong  VARCHAR(10) NULL
+);
 GO
 
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'VAITRO')
-BEGIN
-    CREATE TABLE VAITRO (
-        MaVaiTro  VARCHAR(10)  PRIMARY KEY,
-        TenVaiTro NVARCHAR(50) NOT NULL
-    );
-END
+CREATE TABLE VAITRO (
+    MaVaiTro  VARCHAR(10) PRIMARY KEY,
+    TenVaiTro NVARCHAR(50) NOT NULL
+);
 GO
 
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NHANVIEN')
-BEGIN
-    CREATE TABLE NHANVIEN (
-        MaNV          VARCHAR(10)    PRIMARY KEY,
-        HoTen         NVARCHAR(100)  NOT NULL,
-        NgaySinh      DATE           NULL,
-        Email         VARCHAR(100)   UNIQUE,
-        SoDienThoai   VARCHAR(15)    NULL,
-        GioiTinh      VARCHAR(10)    NULL,
-        DiaChi        NVARCHAR(255)  NULL,
-        CCCD          VARCHAR(20)    NULL,
-        MaPhong       VARCHAR(10),
-        ChucVu        NVARCHAR(100)  NULL,
-        LoaiNhanVien  VARCHAR(20)    NOT NULL CONSTRAINT DF_NV_LoaiNhanVien DEFAULT 'FULLTIME',
-        TrangThai     VARCHAR(20)    NOT NULL CONSTRAINT DF_NV_TrangThai DEFAULT 'ACTIVE',
-        NgayVaoLam    DATE           NULL CONSTRAINT DF_NV_NgayVaoLam DEFAULT CAST(GETDATE() AS DATE),
-        Luong         DECIMAL(18,2)  NULL,
-        MaSoThue      VARCHAR(20),
-        AvatarUrl     NVARCHAR(500)  NULL,
-        CreatedAt     DATETIME       NOT NULL CONSTRAINT DF_NV_CreatedAt DEFAULT GETDATE(),
-        UpdatedAt     DATETIME       NOT NULL CONSTRAINT DF_NV_UpdatedAt DEFAULT GETDATE(),
+CREATE TABLE NHANVIEN (
+    MaNV           VARCHAR(10) PRIMARY KEY,
+    HoTen          NVARCHAR(100) NOT NULL,
+    NgaySinh       DATE NULL,
+    Email          VARCHAR(100) NULL,
+    SoDienThoai    VARCHAR(15) NULL,
+    GioiTinh       VARCHAR(10) NULL,
+    DiaChi         NVARCHAR(255) NULL,
+    CCCD           VARCHAR(20) NULL,
+    MaPhong        VARCHAR(10) NULL,
+    ChucVu         NVARCHAR(100) NULL,
+    LoaiNhanVien   VARCHAR(20) NOT NULL CONSTRAINT DF_NV_LoaiNhanVien DEFAULT 'FULLTIME',
+    TrangThai      VARCHAR(20) NOT NULL CONSTRAINT DF_NV_TrangThai DEFAULT 'ACTIVE',
+    NgayVaoLam     DATE NULL CONSTRAINT DF_NV_NgayVaoLam DEFAULT CAST(GETDATE() AS DATE),
+    LuongEncrypted VARBINARY(MAX) NULL,
+    MaSoThue       VARCHAR(20) NULL,
+    AvatarUrl      NVARCHAR(500) NULL,
+    CreatedAt      DATETIME NOT NULL CONSTRAINT DF_NV_CreatedAt DEFAULT GETDATE(),
+    UpdatedAt      DATETIME NOT NULL CONSTRAINT DF_NV_UpdatedAt DEFAULT GETDATE(),
 
-        CONSTRAINT FK_NV_PHONG FOREIGN KEY (MaPhong) REFERENCES PHONGBAN(MaPhong),
-        CONSTRAINT CK_NV_GioiTinh CHECK (GioiTinh IS NULL OR GioiTinh IN ('NAM', 'NU', 'KHAC')),
-        CONSTRAINT CK_NV_LoaiNhanVien CHECK (LoaiNhanVien IN ('FULLTIME', 'PARTTIME', 'INTERN')),
-        CONSTRAINT CK_NV_TrangThai CHECK (TrangThai IN ('ACTIVE', 'INACTIVE'))
-    );
-END
+    CONSTRAINT FK_NV_PHONG FOREIGN KEY (MaPhong) REFERENCES PHONGBAN(MaPhong),
+    CONSTRAINT CK_NV_GioiTinh CHECK (GioiTinh IS NULL OR GioiTinh IN ('NAM', 'NU', 'KHAC')),
+    CONSTRAINT CK_NV_LoaiNhanVien CHECK (LoaiNhanVien IN ('FULLTIME', 'PARTTIME', 'INTERN')),
+    CONSTRAINT CK_NV_TrangThai CHECK (TrangThai IN ('ACTIVE', 'INACTIVE'))
+);
 GO
 
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'TAIKHOAN')
-BEGIN
-    CREATE TABLE TAIKHOAN (
-        TenDangNhap         VARCHAR(50)    PRIMARY KEY,
-        MatKhauHash         VARBINARY(256) NOT NULL,
-        MaNV                VARCHAR(10)    UNIQUE,
-        MaVaiTro            VARCHAR(10),
-        TrangThai           BIT            DEFAULT 1,
-        CreatedAt           DATETIME       NOT NULL CONSTRAINT DF_TK_CreatedAt DEFAULT GETDATE(),
-        LastLogin           DATETIME       NULL,
-        FailedLoginAttempts INT            NOT NULL CONSTRAINT DF_TK_FailedLoginAttempts DEFAULT 0,
-
-        CONSTRAINT FK_TK_NV FOREIGN KEY (MaNV) REFERENCES NHANVIEN(MaNV),
-        CONSTRAINT FK_TK_VT FOREIGN KEY (MaVaiTro) REFERENCES VAITRO(MaVaiTro)
-    );
-END
+-- Rang buoc duy nhat cho cac truong: email, so dien thoai, CCCD, ma so thue 
+CREATE UNIQUE NONCLUSTERED INDEX IDX_NV_Email ON NHANVIEN(Email) WHERE Email IS NOT NULL;
+CREATE UNIQUE NONCLUSTERED INDEX IDX_NV_SoDienThoai ON NHANVIEN(SoDienThoai) WHERE SoDienThoai IS NOT NULL;
+CREATE UNIQUE NONCLUSTERED INDEX IDX_NV_CCCD ON NHANVIEN(CCCD) WHERE CCCD IS NOT NULL;
+CREATE UNIQUE NONCLUSTERED INDEX IDX_NV_MaSoThue ON NHANVIEN(MaSoThue) WHERE MaSoThue IS NOT NULL;
 GO
 
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'NHATKY')
-BEGIN
-    CREATE TABLE NHATKY (
-        MaNK           INT IDENTITY(1,1) PRIMARY KEY,
-        MaNV_ThucHien  VARCHAR(10),
-        HanhDong       NVARCHAR(50),
-        BangBiTacDong  NVARCHAR(50),
-        HangBiThayDoi  NVARCHAR(50),
-        CotBiThayDoi   NVARCHAR(50),
-        GiaTriCu       NVARCHAR(MAX),
-        GiaTriMoi      NVARCHAR(MAX),
-        ThoiGian       DATETIME DEFAULT GETDATE(),
+CREATE TABLE TAIKHOAN (
+    TenDangNhap         VARCHAR(50) PRIMARY KEY,
+    MatKhauHash         VARBINARY(256) NOT NULL,
+    MaNV                VARCHAR(10) UNIQUE,
+    MaVaiTro            VARCHAR(10),
+    TrangThai           BIT DEFAULT 1,
+    CreatedAt           DATETIME NOT NULL CONSTRAINT DF_TK_CreatedAt DEFAULT GETDATE(),
+    LastLogin           DATETIME NULL,
+    FailedLoginAttempts INT NOT NULL CONSTRAINT DF_TK_FailedLoginAttempts DEFAULT 0,
 
-        CONSTRAINT FK_NK_NV FOREIGN KEY (MaNV_ThucHien) REFERENCES NHANVIEN(MaNV)
-    );
-END
+    CONSTRAINT FK_TK_NV FOREIGN KEY (MaNV) REFERENCES NHANVIEN(MaNV),
+    CONSTRAINT FK_TK_VT FOREIGN KEY (MaVaiTro) REFERENCES VAITRO(MaVaiTro)
+);
 GO
 
-IF NOT EXISTS (SELECT * FROM sys.foreign_keys WHERE name = 'FK_PHONG_TRUONGPHONG')
-BEGIN
-    ALTER TABLE PHONGBAN
-    ADD CONSTRAINT FK_PHONG_TRUONGPHONG
-    FOREIGN KEY (MaTruongPhong) REFERENCES NHANVIEN(MaNV);
-END
+CREATE TABLE NHATKY (
+    MaNK           INT IDENTITY(1,1) PRIMARY KEY,
+    MaNV_ThucHien  VARCHAR(10),
+    HanhDong       NVARCHAR(50),
+    BangBiTacDong  NVARCHAR(50),
+    HangBiThayDoi  NVARCHAR(50),
+    CotBiThayDoi   NVARCHAR(50),
+    GiaTriCu       NVARCHAR(MAX),
+    GiaTriMoi      NVARCHAR(MAX),
+    ThoiGian       DATETIME DEFAULT GETDATE(),
+
+    CONSTRAINT FK_NK_NV FOREIGN KEY (MaNV_ThucHien) REFERENCES NHANVIEN(MaNV)
+);
+GO
+
+ALTER TABLE PHONGBAN
+ADD CONSTRAINT FK_PHONG_TRUONGPHONG
+FOREIGN KEY (MaTruongPhong) REFERENCES NHANVIEN(MaNV);
 GO
 
 -- ============================================================
 -- BUOC 5: Tao cac ham (SU DUNG SESSION_CONTEXT DE LOG DUOC USER)
 -- ============================================================
-
 -- 5.1 Ham lay MaNV hien tai tu Session Context
-IF OBJECT_ID('dbo.fn_GetCurrentMaNV', 'FN') IS NOT NULL DROP FUNCTION dbo.fn_GetCurrentMaNV;
-GO
 CREATE FUNCTION dbo.fn_GetCurrentMaNV()
 RETURNS VARCHAR(10)
 AS
@@ -161,10 +150,7 @@ BEGIN
     RETURN CAST(SESSION_CONTEXT(N'MaNV') AS VARCHAR(10));
 END;
 GO
-
 -- 5.2 Ham lay MaVaiTro hien tai tu Session Context
-IF OBJECT_ID('dbo.fn_GetCurrentRole', 'FN') IS NOT NULL DROP FUNCTION dbo.fn_GetCurrentRole;
-GO
 CREATE FUNCTION dbo.fn_GetCurrentRole()
 RETURNS VARCHAR(10)
 AS
@@ -242,6 +228,7 @@ ALTER ROLE Role_HR_Staff    ADD MEMBER user_hr_staff;
 ALTER ROLE Role_HR_Manager  ADD MEMBER user_hr_manager;
 GO
 
+
 -- ============================================================
 -- BUOC 8: Chan truy cap truc tiep bang nhay cam
 -- ============================================================
@@ -249,19 +236,158 @@ DENY SELECT, INSERT, UPDATE, DELETE ON NHANVIEN TO PUBLIC;
 DENY SELECT, INSERT, UPDATE, DELETE ON TAIKHOAN TO PUBLIC;
 GO
 
+
 -- ============================================================
 -- BUOC 9: Cac Stored Procedure
 -- ============================================================
 
--- 9.1 Dang nhap & Kiem tra token
-IF OBJECT_ID('dbo.sp_Auth_Login', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_Auth_Login;
+-- tao key (ma hoa luong)
+IF NOT EXISTS (SELECT 1 FROM sys.symmetric_keys WHERE name = '##MS_DatabaseMasterKey##')
+BEGIN
+    CREATE MASTER KEY ENCRYPTION BY PASSWORD = 'StrongPassword@2026!';
+END
 GO
+
+CREATE CERTIFICATE Cert_QuanLyLuong
+WITH SUBJECT = 'Certificate bao ve khoa ma hoa luong nhan vien';
+GO
+
+CREATE PROCEDURE dbo.sp_CreateSalaryKeyForPhong
+    @MaPhong VARCHAR(10)
+WITH EXECUTE AS OWNER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @KeyName SYSNAME = 'SymKey_' + @MaPhong;
+    DECLARE @sql NVARCHAR(MAX);
+
+    IF @MaPhong IS NULL OR NOT EXISTS (SELECT 1 FROM PHONGBAN WHERE MaPhong = @MaPhong)
+    BEGIN
+        RAISERROR(N'Ma phong khong hop le', 16, 1);
+        RETURN;
+    END
+
+    IF NOT EXISTS (SELECT 1 FROM sys.symmetric_keys WHERE name = @KeyName)
+    BEGIN
+        SET @sql = N'CREATE SYMMETRIC KEY ' + QUOTENAME(@KeyName) +
+                   N' WITH ALGORITHM = AES_256 ENCRYPTION BY CERTIFICATE Cert_QuanLyLuong;';
+        EXEC sp_executesql @sql;
+    END
+END;
+GO
+
+CREATE PROCEDURE dbo.sp_OpenSalaryKeyByPhong
+    @MaPhong VARCHAR(10)
+WITH EXECUTE AS OWNER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @KeyName SYSNAME = 'SymKey_' + @MaPhong;
+    DECLARE @sql NVARCHAR(MAX);
+
+    IF NOT EXISTS (SELECT 1 FROM sys.symmetric_keys WHERE name = @KeyName)
+    BEGIN
+        RAISERROR(N'Chua co khoa ma hoa luong cho phong ban nay', 16, 1);
+        RETURN;
+    END
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM sys.openkeys ok
+        JOIN sys.symmetric_keys sk ON ok.key_id = sk.symmetric_key_id
+        WHERE sk.name = @KeyName
+    )
+    BEGIN
+        SET @sql = N'OPEN SYMMETRIC KEY ' + QUOTENAME(@KeyName) +
+                   N' DECRYPTION BY CERTIFICATE Cert_QuanLyLuong;';
+        EXEC sp_executesql @sql;
+    END
+END;
+GO
+
+CREATE PROCEDURE dbo.sp_CloseSalaryKeyByPhong
+    @MaPhong VARCHAR(10)
+WITH EXECUTE AS OWNER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @KeyName SYSNAME = 'SymKey_' + @MaPhong;
+    DECLARE @sql NVARCHAR(MAX);
+
+    IF EXISTS (
+        SELECT 1
+        FROM sys.openkeys ok
+        JOIN sys.symmetric_keys sk ON ok.key_id = sk.symmetric_key_id
+        WHERE sk.name = @KeyName
+    )
+    BEGIN
+        SET @sql = N'CLOSE SYMMETRIC KEY ' + QUOTENAME(@KeyName) + N';';
+        EXEC sp_executesql @sql;
+    END
+END;
+GO
+
+CREATE PROCEDURE dbo.sp_OpenAllSalaryKeys
+WITH EXECUTE AS OWNER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @MaPhong VARCHAR(10);
+
+    DECLARE cur CURSOR LOCAL FAST_FORWARD FOR
+    SELECT MaPhong FROM PHONGBAN;
+
+    OPEN cur;
+    FETCH NEXT FROM cur INTO @MaPhong;
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        EXEC dbo.sp_OpenSalaryKeyByPhong @MaPhong;
+        FETCH NEXT FROM cur INTO @MaPhong;
+    END
+
+    CLOSE cur;
+    DEALLOCATE cur;
+END;
+GO
+
+CREATE PROCEDURE dbo.sp_CloseAllSalaryKeys
+WITH EXECUTE AS OWNER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @MaPhong VARCHAR(10);
+
+    DECLARE cur CURSOR LOCAL FAST_FORWARD FOR
+    SELECT MaPhong FROM PHONGBAN;
+
+    OPEN cur;
+    FETCH NEXT FROM cur INTO @MaPhong;
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        EXEC dbo.sp_CloseSalaryKeyByPhong @MaPhong;
+        FETCH NEXT FROM cur INTO @MaPhong;
+    END
+
+    CLOSE cur;
+    DEALLOCATE cur;
+END;
+GO
+
+-- 9.1 Dang nhap & Kiem tra token
 CREATE PROCEDURE dbo.sp_Auth_Login
     @TenDangNhap VARCHAR(50),
     @MatKhau     VARCHAR(100)
 AS
 BEGIN
     SET NOCOUNT ON;
+
     IF EXISTS (
         SELECT 1
         FROM TAIKHOAN tk
@@ -272,7 +398,10 @@ BEGIN
           AND nv.TrangThai = 'ACTIVE'
     )
     BEGIN
-        UPDATE TAIKHOAN SET LastLogin = GETDATE(), FailedLoginAttempts = 0 WHERE TenDangNhap = @TenDangNhap;
+        UPDATE TAIKHOAN
+        SET LastLogin = GETDATE(), FailedLoginAttempts = 0
+        WHERE TenDangNhap = @TenDangNhap;
+
         SELECT 'Success' AS Status, tk.TenDangNhap, nv.MaNV, nv.HoTen, nv.Email, nv.MaPhong,
                pb.TenPhong AS TenPhongBan, tk.MaVaiTro, vt.TenVaiTro, tk.TrangThai AS TrangThaiTaiKhoan,
                CAST(CASE WHEN tk.TrangThai = 1 THEN 0 ELSE 1 END AS BIT) AS IsLocked
@@ -284,22 +413,25 @@ BEGIN
     END
     ELSE
     BEGIN
-        UPDATE TAIKHOAN SET FailedLoginAttempts = FailedLoginAttempts + 1 WHERE TenDangNhap = @TenDangNhap;
+        UPDATE TAIKHOAN
+        SET FailedLoginAttempts = FailedLoginAttempts + 1
+        WHERE TenDangNhap = @TenDangNhap;
+
         SELECT 'Fail' AS Status, NULL AS MaNV, NULL AS MaVaiTro;
     END
 END;
 GO
 
-IF OBJECT_ID('dbo.sp_Auth_Me', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_Auth_Me;
-GO
 CREATE PROCEDURE dbo.sp_Auth_Me
     @MaNV_Input VARCHAR(10)
 AS
 BEGIN
     SET NOCOUNT ON;
+
     SELECT tk.TenDangNhap, nv.MaNV, nv.HoTen, nv.Email, nv.SoDienThoai, nv.MaPhong,
            pb.TenPhong AS TenPhongBan, tk.MaVaiTro, vt.TenVaiTro, tk.TrangThai AS TrangThaiTaiKhoan,
-           CAST(CASE WHEN tk.TrangThai = 1 THEN 0 ELSE 1 END AS BIT) AS IsLocked, tk.LastLogin
+           CAST(CASE WHEN tk.TrangThai = 1 THEN 0 ELSE 1 END AS BIT) AS IsLocked,
+           tk.LastLogin
     FROM NHANVIEN nv
     LEFT JOIN TAIKHOAN tk ON nv.MaNV = tk.MaNV
     LEFT JOIN PHONGBAN pb ON nv.MaPhong = pb.MaPhong
@@ -307,44 +439,52 @@ BEGIN
     WHERE nv.MaNV = @MaNV_Input;
 END;
 GO
+
 -- 9.2 Ho so va Dong nghiep (EMP/MAN)
-IF OBJECT_ID('dbo.sp_Employee_XemThongTinCaNhan', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_Employee_XemThongTinCaNhan;
-GO
 CREATE PROCEDURE dbo.sp_Employee_XemThongTinCaNhan
     @MaNV_Input VARCHAR(10)
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    DECLARE @MaPhong VARCHAR(10);
+    SELECT @MaPhong = MaPhong FROM NHANVIEN WHERE MaNV = @MaNV_Input;
+
+    IF @MaPhong IS NOT NULL EXEC dbo.sp_OpenSalaryKeyByPhong @MaPhong;
+
     SELECT nv.MaNV, nv.HoTen, nv.NgaySinh, nv.Email, nv.SoDienThoai, nv.GioiTinh,
            nv.DiaChi, nv.CCCD, nv.MaSoThue, nv.MaPhong, pb.TenPhong AS TenPhongBan,
-           mgr.HoTen AS managerName, -
+           mgr.HoTen AS managerName,
            nv.ChucVu, nv.LoaiNhanVien, nv.TrangThai, nv.NgayVaoLam, nv.AvatarUrl,
-           nv.Luong, tk.TenDangNhap, tk.MaVaiTro, vt.TenVaiTro, tk.TrangThai AS TrangThaiTaiKhoan,
+           TRY_CONVERT(DECIMAL(18,2), CONVERT(VARCHAR(50), DecryptByKey(nv.LuongEncrypted, 1, CONVERT(VARCHAR(10), nv.MaNV)))) AS Luong,
+           tk.TenDangNhap, tk.MaVaiTro, vt.TenVaiTro, tk.TrangThai AS TrangThaiTaiKhoan,
            CAST(CASE WHEN tk.TrangThai = 1 THEN 0 ELSE 1 END AS BIT) AS IsLocked,
            tk.LastLogin, nv.CreatedAt, nv.UpdatedAt
     FROM NHANVIEN nv
     LEFT JOIN PHONGBAN pb ON nv.MaPhong = pb.MaPhong
-    LEFT JOIN NHANVIEN mgr ON pb.MaTruongPhong = mgr.MaNV 
+    LEFT JOIN NHANVIEN mgr ON pb.MaTruongPhong = mgr.MaNV
     LEFT JOIN TAIKHOAN tk ON nv.MaNV = tk.MaNV
     LEFT JOIN VAITRO vt ON tk.MaVaiTro = vt.MaVaiTro
     WHERE nv.MaNV = @MaNV_Input;
+
+    IF @MaPhong IS NOT NULL EXEC dbo.sp_CloseSalaryKeyByPhong @MaPhong;
 END;
 GO
 
-IF OBJECT_ID('dbo.sp_Employee_XemNhanVienCungPhong', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_Employee_XemNhanVienCungPhong;
-GO
 CREATE PROCEDURE dbo.sp_Employee_XemNhanVienCungPhong
     @MaNV_Input VARCHAR(10)
 AS
 BEGIN
     SET NOCOUNT ON;
+
     DECLARE @MaPhong VARCHAR(10);
     SELECT @MaPhong = MaPhong FROM NHANVIEN WHERE MaNV = @MaNV_Input;
 
     SELECT nv.MaNV, nv.HoTen, nv.NgaySinh, nv.Email, nv.SoDienThoai, nv.GioiTinh,
-           nv.DiaChi, nv.MaPhong, pb.TenPhong AS TenPhongBan, nv.ChucVu, nv.LoaiNhanVien, 
+           nv.DiaChi, nv.MaPhong, pb.TenPhong AS TenPhongBan, nv.ChucVu, nv.LoaiNhanVien,
            nv.TrangThai, nv.NgayVaoLam, nv.AvatarUrl, tk.MaVaiTro, vt.TenVaiTro,
-           tk.TrangThai AS TrangThaiTaiKhoan, CAST(CASE WHEN tk.TrangThai = 1 THEN 0 ELSE 1 END AS BIT) AS IsLocked
+           tk.TrangThai AS TrangThaiTaiKhoan,
+           CAST(CASE WHEN tk.TrangThai = 1 THEN 0 ELSE 1 END AS BIT) AS IsLocked
     FROM NHANVIEN nv
     LEFT JOIN PHONGBAN pb ON nv.MaPhong = pb.MaPhong
     LEFT JOIN TAIKHOAN tk ON nv.MaNV = tk.MaNV
@@ -353,20 +493,22 @@ BEGIN
 END;
 GO
 
-IF OBJECT_ID('dbo.sp_Manager_XemNhanVienCungPhong', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_Manager_XemNhanVienCungPhong;
-GO
 CREATE PROCEDURE dbo.sp_Manager_XemNhanVienCungPhong
     @MaNV_Input VARCHAR(10)
 AS
 BEGIN
     SET NOCOUNT ON;
+
     DECLARE @MaPhong VARCHAR(10);
     SELECT @MaPhong = MaPhong FROM NHANVIEN WHERE MaNV = @MaNV_Input;
+
+    IF @MaPhong IS NOT NULL EXEC dbo.sp_OpenSalaryKeyByPhong @MaPhong;
 
     SELECT nv.MaNV, nv.HoTen, nv.NgaySinh, nv.Email, nv.SoDienThoai, nv.GioiTinh,
            nv.DiaChi, nv.CCCD, nv.MaSoThue, nv.MaPhong, pb.TenPhong AS TenPhongBan,
            nv.ChucVu, nv.LoaiNhanVien, nv.TrangThai, nv.NgayVaoLam, nv.AvatarUrl,
-           nv.Luong, tk.MaVaiTro, vt.TenVaiTro, tk.TrangThai AS TrangThaiTaiKhoan,
+           TRY_CONVERT(DECIMAL(18,2), CONVERT(VARCHAR(50), DecryptByKey(nv.LuongEncrypted, 1, CONVERT(VARCHAR(10), nv.MaNV)))) AS Luong,
+           tk.MaVaiTro, vt.TenVaiTro, tk.TrangThai AS TrangThaiTaiKhoan,
            CAST(CASE WHEN tk.TrangThai = 1 THEN 0 ELSE 1 END AS BIT) AS IsLocked,
            nv.CreatedAt, nv.UpdatedAt
     FROM NHANVIEN nv
@@ -374,49 +516,57 @@ BEGIN
     LEFT JOIN TAIKHOAN tk ON nv.MaNV = tk.MaNV
     LEFT JOIN VAITRO vt ON tk.MaVaiTro = vt.MaVaiTro
     WHERE nv.MaPhong = @MaPhong;
+
+    IF @MaPhong IS NOT NULL EXEC dbo.sp_CloseSalaryKeyByPhong @MaPhong;
 END;
 GO
 
 -- 9.3 Ke toan (FIN)
-IF OBJECT_ID('dbo.sp_Finance_XemLuongCongTy', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_Finance_XemLuongCongTy;
-GO
 CREATE PROCEDURE dbo.sp_Finance_XemLuongCongTy
     @MaNV_Input VARCHAR(10)
 AS
 BEGIN
     SET NOCOUNT ON;
+
     DECLARE @MaPhongFinance VARCHAR(10);
     SELECT @MaPhongFinance = MaPhong FROM NHANVIEN WHERE MaNV = @MaNV_Input;
 
+    EXEC dbo.sp_OpenAllSalaryKeys;
+
     SELECT nv.MaNV,
-           CASE WHEN nv.MaPhong = @MaPhongFinance THEN nv.HoTen ELSE NULL END AS HoTen,
+           nv.HoTen,
            CASE WHEN nv.MaPhong = @MaPhongFinance THEN nv.NgaySinh ELSE NULL END AS NgaySinh,
            CASE WHEN nv.MaPhong = @MaPhongFinance THEN nv.Email ELSE NULL END AS Email,
            CASE WHEN nv.MaPhong = @MaPhongFinance THEN nv.SoDienThoai ELSE NULL END AS SoDienThoai,
            CASE WHEN nv.MaPhong = @MaPhongFinance THEN nv.MaPhong ELSE NULL END AS MaPhong,
            CASE WHEN nv.MaPhong = @MaPhongFinance THEN pb.TenPhong ELSE NULL END AS TenPhongBan,
            CASE WHEN nv.MaPhong = @MaPhongFinance THEN nv.ChucVu ELSE NULL END AS ChucVu,
-           nv.Luong, nv.MaSoThue, nv.TrangThai, nv.LoaiNhanVien
+           TRY_CONVERT(DECIMAL(18,2), CONVERT(VARCHAR(50), DecryptByKey(nv.LuongEncrypted, 1, CONVERT(VARCHAR(10), nv.MaNV)))) AS Luong,
+           nv.MaSoThue, nv.TrangThai, nv.LoaiNhanVien
     FROM NHANVIEN nv
     LEFT JOIN PHONGBAN pb ON nv.MaPhong = pb.MaPhong;
+
+    EXEC dbo.sp_CloseAllSalaryKeys;
 END;
 GO
 
 -- 9.4 Nhan su (HR & HRM)
-IF OBJECT_ID('dbo.sp_HR_XemNhanVienNgoaiPhong', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_HR_XemNhanVienNgoaiPhong;
-GO
 CREATE PROCEDURE dbo.sp_HR_XemNhanVienNgoaiPhong
     @MaNV_Input VARCHAR(10)
 AS
 BEGIN
     SET NOCOUNT ON;
+
     DECLARE @MaPhongHR VARCHAR(10);
     SELECT @MaPhongHR = MaPhong FROM NHANVIEN WHERE MaNV = @MaNV_Input;
+
+	EXEC dbo.sp_OpenAllSalaryKeys;
 
     SELECT nv.MaNV, nv.HoTen, nv.NgaySinh, nv.Email, nv.SoDienThoai, nv.GioiTinh,
            nv.DiaChi, nv.CCCD, nv.MaSoThue, nv.MaPhong, pb.TenPhong AS TenPhongBan,
            nv.ChucVu, nv.LoaiNhanVien, nv.TrangThai, nv.NgayVaoLam, nv.AvatarUrl,
-           nv.Luong, tk.TenDangNhap, tk.MaVaiTro, vt.TenVaiTro, tk.TrangThai AS TrangThaiTaiKhoan,
+           TRY_CONVERT(DECIMAL(18,2), CONVERT(VARCHAR(50), DecryptByKey(nv.LuongEncrypted, 1, CONVERT(VARCHAR(10), nv.MaNV)))) AS Luong,
+           tk.TenDangNhap, tk.MaVaiTro, vt.TenVaiTro, tk.TrangThai AS TrangThaiTaiKhoan,
            CAST(CASE WHEN tk.TrangThai = 1 THEN 0 ELSE 1 END AS BIT) AS IsLocked,
            nv.CreatedAt, nv.UpdatedAt
     FROM NHANVIEN nv
@@ -424,155 +574,31 @@ BEGIN
     LEFT JOIN TAIKHOAN tk ON nv.MaNV = tk.MaNV
     LEFT JOIN VAITRO vt ON tk.MaVaiTro = vt.MaVaiTro
     WHERE nv.MaPhong <> @MaPhongHR;
+
+	EXEC dbo.sp_CloseAllSalaryKeys;
 END;
 GO
 
-IF OBJECT_ID('dbo.sp_HRManager_XemTatCaNhanVien', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_HRManager_XemTatCaNhanVien;
-GO
 CREATE PROCEDURE dbo.sp_HRManager_XemTatCaNhanVien
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    EXEC dbo.sp_OpenAllSalaryKeys;
+
     SELECT nv.MaNV, nv.HoTen, nv.NgaySinh, nv.Email, nv.SoDienThoai, nv.GioiTinh,
            nv.DiaChi, nv.CCCD, nv.MaSoThue, nv.MaPhong, pb.TenPhong AS TenPhongBan,
            nv.ChucVu, nv.LoaiNhanVien, nv.TrangThai, nv.NgayVaoLam, nv.AvatarUrl,
-           nv.Luong, tk.TenDangNhap, tk.MaVaiTro, vt.TenVaiTro, tk.TrangThai AS TrangThaiTaiKhoan,
+           TRY_CONVERT(DECIMAL(18,2), CONVERT(VARCHAR(50), DecryptByKey(nv.LuongEncrypted, 1, CONVERT(VARCHAR(10), nv.MaNV)))) AS Luong,
+           tk.TenDangNhap, tk.MaVaiTro, vt.TenVaiTro, tk.TrangThai AS TrangThaiTaiKhoan,
            CAST(CASE WHEN tk.TrangThai = 1 THEN 0 ELSE 1 END AS BIT) AS IsLocked,
            tk.LastLogin, tk.FailedLoginAttempts, nv.CreatedAt, nv.UpdatedAt
     FROM NHANVIEN nv
     LEFT JOIN PHONGBAN pb ON nv.MaPhong = pb.MaPhong
     LEFT JOIN TAIKHOAN tk ON nv.MaNV = tk.MaNV
     LEFT JOIN VAITRO vt ON tk.MaVaiTro = vt.MaVaiTro;
-END;
-GO
 
-IF OBJECT_ID('dbo.sp_HR_UpdateNhanVien', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_HR_UpdateNhanVien;
-GO
-CREATE PROCEDURE dbo.sp_HR_UpdateNhanVien
-    @MaNV_Input    VARCHAR(10),
-    @MaNV          VARCHAR(10),
-    @HoTen         NVARCHAR(100) = NULL,
-    @NgaySinh      DATE          = NULL,
-    @Email         VARCHAR(100)  = NULL,
-    @SoDienThoai   VARCHAR(15)   = NULL,
-    @GioiTinh      VARCHAR(10)   = NULL,
-    @DiaChi        NVARCHAR(255) = NULL,
-    @CCCD          VARCHAR(20)   = NULL,
-    @MaPhong       VARCHAR(10)   = NULL,
-    @ChucVu        NVARCHAR(100) = NULL,
-    @LoaiNhanVien  VARCHAR(20)   = NULL,
-    @TrangThai     VARCHAR(20)   = NULL,
-    @NgayVaoLam    DATE          = NULL,
-    @Luong         DECIMAL(18,2) = NULL,
-    @MaSoThue      VARCHAR(20)   = NULL,
-    @AvatarUrl     NVARCHAR(500) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @MaPhongHR VARCHAR(10);
-    SELECT @MaPhongHR = MaPhong FROM NHANVIEN WHERE MaNV = @MaNV_Input;
-
-    IF EXISTS (SELECT 1 FROM NHANVIEN WHERE MaNV = @MaNV AND MaPhong = @MaPhongHR)
-    BEGIN
-        RAISERROR(N'Khong duoc phep sua nhan vien cung phong HR', 16, 1);
-        RETURN;
-    END
-
-    UPDATE NHANVIEN SET
-        HoTen = COALESCE(@HoTen, HoTen), NgaySinh = COALESCE(@NgaySinh, NgaySinh), Email = COALESCE(@Email, Email),
-        SoDienThoai = COALESCE(@SoDienThoai, SoDienThoai), GioiTinh = COALESCE(@GioiTinh, GioiTinh),
-        DiaChi = COALESCE(@DiaChi, DiaChi), CCCD = COALESCE(@CCCD, CCCD), MaPhong = COALESCE(@MaPhong, MaPhong),
-        ChucVu = COALESCE(@ChucVu, ChucVu), LoaiNhanVien = COALESCE(@LoaiNhanVien, LoaiNhanVien),
-        TrangThai = COALESCE(@TrangThai, TrangThai), NgayVaoLam = COALESCE(@NgayVaoLam, NgayVaoLam),
-        Luong = COALESCE(@Luong, Luong), MaSoThue = COALESCE(@MaSoThue, MaSoThue),
-        AvatarUrl = COALESCE(@AvatarUrl, AvatarUrl), UpdatedAt = GETDATE()
-    WHERE MaNV = @MaNV;
-END;
-GO
-
-IF OBJECT_ID('dbo.sp_HR_InsertNhanVien', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_HR_InsertNhanVien;
-GO
-CREATE PROCEDURE dbo.sp_HR_InsertNhanVien
-    @MaNV_Input    VARCHAR(10),
-    @MaNV          VARCHAR(10),
-    @HoTen         NVARCHAR(100),
-    @NgaySinh      DATE          = NULL,
-    @Email         VARCHAR(100)  = NULL,
-    @SoDienThoai   VARCHAR(15)   = NULL,
-    @GioiTinh      VARCHAR(10)   = NULL,
-    @DiaChi        NVARCHAR(255) = NULL,
-    @CCCD          VARCHAR(20)   = NULL,
-    @MaPhong       VARCHAR(10),
-    @ChucVu        NVARCHAR(100) = NULL,
-    @LoaiNhanVien  VARCHAR(20)   = 'FULLTIME',
-    @TrangThai     VARCHAR(20)   = 'ACTIVE',
-    @NgayVaoLam    DATE          = NULL,
-    @Luong         DECIMAL(18,2) = NULL,
-    @MaSoThue      VARCHAR(20)   = NULL,
-    @AvatarUrl     NVARCHAR(500) = NULL,
-    @TenDangNhap   VARCHAR(50),
-    @MatKhau       VARCHAR(100)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @MaPhongHR VARCHAR(10);
-    SELECT @MaPhongHR = MaPhong FROM NHANVIEN WHERE MaNV = @MaNV_Input;
-
-    IF @MaPhong = @MaPhongHR
-    BEGIN
-        RAISERROR(N'Khong duoc them nhan vien vao phong HR', 16, 1);
-        RETURN;
-    END
-
-    BEGIN TRANSACTION;
-    BEGIN TRY
-        INSERT INTO NHANVIEN (MaNV, HoTen, NgaySinh, Email, SoDienThoai, GioiTinh, DiaChi, CCCD,
-            MaPhong, ChucVu, LoaiNhanVien, TrangThai, NgayVaoLam, Luong, MaSoThue, AvatarUrl)
-        VALUES (@MaNV, @HoTen, @NgaySinh, @Email, @SoDienThoai, @GioiTinh, @DiaChi, @CCCD,
-            @MaPhong, @ChucVu, COALESCE(@LoaiNhanVien, 'FULLTIME'), COALESCE(@TrangThai, 'ACTIVE'),
-            COALESCE(@NgayVaoLam, CAST(GETDATE() AS DATE)), @Luong, @MaSoThue, @AvatarUrl);
-
-        INSERT INTO TAIKHOAN (TenDangNhap, MatKhauHash, MaNV, MaVaiTro, TrangThai)
-        VALUES (@TenDangNhap, HASHBYTES('SHA2_256', @MatKhau), @MaNV, 'EMP', 1);
-
-        COMMIT TRANSACTION;
-    END TRY
-    BEGIN CATCH
-        ROLLBACK TRANSACTION;
-        DECLARE @Err NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR(@Err, 16, 1);
-    END CATCH
-END;
-GO
-
-IF OBJECT_ID('dbo.sp_HR_DeleteNhanVien', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_HR_DeleteNhanVien;
-GO
-CREATE PROCEDURE dbo.sp_HR_DeleteNhanVien
-    @MaNV_Input VARCHAR(10),
-    @MaNV       VARCHAR(10)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @MaPhongHR VARCHAR(10);
-    SELECT @MaPhongHR = MaPhong FROM NHANVIEN WHERE MaNV = @MaNV_Input;
-
-    IF EXISTS (SELECT 1 FROM NHANVIEN WHERE MaNV = @MaNV AND MaPhong = @MaPhongHR)
-    BEGIN
-        RAISERROR(N'Khong duoc xoa nhan vien cung phong HR', 16, 1);
-        RETURN;
-    END
-
-    BEGIN TRANSACTION;
-    BEGIN TRY
-        DELETE FROM TAIKHOAN WHERE MaNV = @MaNV;
-        DELETE FROM NHANVIEN  WHERE MaNV = @MaNV;
-        COMMIT TRANSACTION;
-    END TRY
-    BEGIN CATCH
-        ROLLBACK TRANSACTION;
-        DECLARE @Err NVARCHAR(4000) = ERROR_MESSAGE();
-        RAISERROR(@Err, 16, 1);
-    END CATCH
+    EXEC dbo.sp_CloseAllSalaryKeys;
 END;
 GO
 
@@ -581,41 +607,61 @@ GO
 CREATE PROCEDURE dbo.sp_HRManager_InsertNhanVien
     @MaNV          VARCHAR(10),
     @HoTen         NVARCHAR(100),
-    @NgaySinh      DATE          = NULL,
-    @Email         VARCHAR(100)  = NULL,
-    @SoDienThoai   VARCHAR(15)   = NULL,
-    @GioiTinh      VARCHAR(10)   = NULL,
+    @NgaySinh      DATE = NULL,
+    @Email         VARCHAR(100) = NULL,
+    @SoDienThoai   VARCHAR(15) = NULL,
+    @GioiTinh      VARCHAR(10) = NULL,
     @DiaChi        NVARCHAR(255) = NULL,
-    @CCCD          VARCHAR(20)   = NULL,
+    @CCCD          VARCHAR(20) = NULL,
     @MaPhong       VARCHAR(10),
     @ChucVu        NVARCHAR(100) = NULL,
-    @LoaiNhanVien  VARCHAR(20)   = 'FULLTIME',
-    @TrangThai     VARCHAR(20)   = 'ACTIVE',
-    @NgayVaoLam    DATE          = NULL,
+    @LoaiNhanVien  VARCHAR(20) = 'FULLTIME',
+    @TrangThai     VARCHAR(20) = 'ACTIVE',
+    @NgayVaoLam    DATE = NULL,
     @Luong         DECIMAL(18,2) = NULL,
-    @MaSoThue      VARCHAR(20)   = NULL,
+    @MaSoThue      VARCHAR(20) = NULL,
     @AvatarUrl     NVARCHAR(500) = NULL,
     @TenDangNhap   VARCHAR(50),
     @MatKhau       VARCHAR(100),
-    @MaVaiTro      VARCHAR(10)   = 'EMP'
+    @MaVaiTro      VARCHAR(10) = 'EMP'
+WITH EXECUTE AS OWNER
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    IF @MaVaiTro = 'HRM' AND EXISTS (SELECT 1 FROM TAIKHOAN WHERE MaVaiTro = 'HRM' AND TrangThai = 1)
+    BEGIN RAISERROR(N'Thất bại: Toàn công ty chỉ được phép có DUY NHẤT 1 Trưởng phòng Nhân sự (HRM)!', 16, 1); RETURN; END
+
+    IF @MaVaiTro IN ('MAN', 'HRM') AND EXISTS (
+        SELECT 1 FROM TAIKHOAN tk JOIN NHANVIEN nv ON tk.MaNV = nv.MaNV 
+        WHERE nv.MaPhong = @MaPhong AND tk.MaVaiTro IN ('MAN', 'HRM') AND tk.TrangThai = 1
+    )
+    BEGIN RAISERROR(N'Thất bại: Phòng ban này đã có Quản lý / Trưởng phòng!', 16, 1); RETURN; END
+
+    DECLARE @LuongEncrypted VARBINARY(MAX) = NULL;
     BEGIN TRANSACTION;
     BEGIN TRY
-        INSERT INTO NHANVIEN (MaNV, HoTen, NgaySinh, Email, SoDienThoai, GioiTinh, DiaChi, CCCD,
-            MaPhong, ChucVu, LoaiNhanVien, TrangThai, NgayVaoLam, Luong, MaSoThue, AvatarUrl)
-        VALUES (@MaNV, @HoTen, @NgaySinh, @Email, @SoDienThoai, @GioiTinh, @DiaChi, @CCCD,
-            @MaPhong, @ChucVu, COALESCE(@LoaiNhanVien, 'FULLTIME'), COALESCE(@TrangThai, 'ACTIVE'),
-            COALESCE(@NgayVaoLam, CAST(GETDATE() AS DATE)), @Luong, @MaSoThue, @AvatarUrl);
+        IF @Luong IS NOT NULL
+        BEGIN
+            EXEC dbo.sp_OpenSalaryKeyByPhong @MaPhong;
+            SET @LuongEncrypted = EncryptByKey(Key_GUID('SymKey_' + @MaPhong), CONVERT(VARCHAR(50), @Luong), 1, CONVERT(VARCHAR(10), @MaNV));
+            EXEC dbo.sp_CloseSalaryKeyByPhong @MaPhong;
+        END
 
+        INSERT INTO NHANVIEN (MaNV, HoTen, NgaySinh, Email, SoDienThoai, GioiTinh, DiaChi, CCCD, MaPhong, ChucVu, LoaiNhanVien, TrangThai, NgayVaoLam, LuongEncrypted, MaSoThue, AvatarUrl)
+        VALUES (@MaNV, @HoTen, @NgaySinh, @Email, @SoDienThoai, @GioiTinh, @DiaChi, @CCCD, @MaPhong, @ChucVu, COALESCE(@LoaiNhanVien, 'FULLTIME'), COALESCE(@TrangThai, 'ACTIVE'), COALESCE(@NgayVaoLam, CAST(GETDATE() AS DATE)), @LuongEncrypted, @MaSoThue, @AvatarUrl);
+
+        DECLARE @TrangThaiTK BIT = CASE WHEN @TrangThai = 'INACTIVE' THEN 0 ELSE 1 END;
         INSERT INTO TAIKHOAN (TenDangNhap, MatKhauHash, MaNV, MaVaiTro, TrangThai)
-        VALUES (@TenDangNhap, HASHBYTES('SHA2_256', @MatKhau), @MaNV, @MaVaiTro, 1);
+        VALUES (@TenDangNhap, HASHBYTES('SHA2_256', @MatKhau), @MaNV, @MaVaiTro, @TrangThaiTK);
+
+        IF @MaVaiTro IN ('MAN', 'HRM') AND @TrangThai = 'ACTIVE'
+            UPDATE PHONGBAN SET MaTruongPhong = @MaNV WHERE MaPhong = @MaPhong;
 
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
-        ROLLBACK TRANSACTION;
+        IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
         DECLARE @Err NVARCHAR(4000) = ERROR_MESSAGE();
         RAISERROR(@Err, 16, 1);
     END CATCH
@@ -627,74 +673,308 @@ GO
 CREATE PROCEDURE dbo.sp_HRManager_UpdateNhanVien
     @MaNV          VARCHAR(10),
     @HoTen         NVARCHAR(100) = NULL,
-    @NgaySinh      DATE          = NULL,
-    @Email         VARCHAR(100)  = NULL,
-    @SoDienThoai   VARCHAR(15)   = NULL,
-    @GioiTinh      VARCHAR(10)   = NULL,
+    @NgaySinh      DATE = NULL,
+    @Email         VARCHAR(100) = NULL,
+    @SoDienThoai   VARCHAR(15) = NULL,
+    @GioiTinh      VARCHAR(10) = NULL,
     @DiaChi        NVARCHAR(255) = NULL,
-    @CCCD          VARCHAR(20)   = NULL,
-    @MaPhong       VARCHAR(10)   = NULL,
+    @CCCD          VARCHAR(20) = NULL,
+    @MaPhong       VARCHAR(10) = NULL,
     @ChucVu        NVARCHAR(100) = NULL,
-    @LoaiNhanVien  VARCHAR(20)   = NULL,
-    @TrangThai     VARCHAR(20)   = NULL,
-    @NgayVaoLam    DATE          = NULL,
+    @LoaiNhanVien  VARCHAR(20) = NULL,
+    @TrangThai     VARCHAR(20) = NULL,
+    @NgayVaoLam    DATE = NULL,
     @Luong         DECIMAL(18,2) = NULL,
-    @MaSoThue      VARCHAR(20)   = NULL,
+    @MaSoThue      VARCHAR(20) = NULL,
     @AvatarUrl     NVARCHAR(500) = NULL,
-    @MaVaiTro      VARCHAR(10)   = NULL
+    @MaVaiTro      VARCHAR(10) = NULL
+WITH EXECUTE AS OWNER
 AS
 BEGIN
     SET NOCOUNT ON;
-    UPDATE NHANVIEN SET
-        HoTen = COALESCE(@HoTen, HoTen), NgaySinh = COALESCE(@NgaySinh, NgaySinh), Email = COALESCE(@Email, Email),
-        SoDienThoai = COALESCE(@SoDienThoai, SoDienThoai), GioiTinh = COALESCE(@GioiTinh, GioiTinh),
-        DiaChi = COALESCE(@DiaChi, DiaChi), CCCD = COALESCE(@CCCD, CCCD), MaPhong = COALESCE(@MaPhong, MaPhong),
-        ChucVu = COALESCE(@ChucVu, ChucVu), LoaiNhanVien = COALESCE(@LoaiNhanVien, LoaiNhanVien),
-        TrangThai = COALESCE(@TrangThai, TrangThai), NgayVaoLam = COALESCE(@NgayVaoLam, NgayVaoLam),
-        Luong = COALESCE(@Luong, Luong), MaSoThue = COALESCE(@MaSoThue, MaSoThue),
-        AvatarUrl = COALESCE(@AvatarUrl, AvatarUrl), UpdatedAt = GETDATE()
-    WHERE MaNV = @MaNV;
+    DECLARE @OldMaPhong VARCHAR(10), @NewMaPhong VARCHAR(10), @CurrentRole VARCHAR(10), @OldTrangThai VARCHAR(20);
+    SELECT @OldMaPhong = MaPhong, @OldTrangThai = TrangThai FROM NHANVIEN WHERE MaNV = @MaNV;
+    SELECT @CurrentRole = MaVaiTro FROM TAIKHOAN WHERE MaNV = @MaNV;
+    
+    SET @NewMaPhong = COALESCE(@MaPhong, @OldMaPhong);
+    DECLARE @FinalRole VARCHAR(10) = COALESCE(@MaVaiTro, @CurrentRole);
+    DECLARE @FinalTrangThai VARCHAR(20) = COALESCE(@TrangThai, @OldTrangThai);
 
-    IF @MaVaiTro IS NOT NULL
-        UPDATE TAIKHOAN SET MaVaiTro = @MaVaiTro WHERE MaNV = @MaNV;
-END;
-GO
+    IF @FinalTrangThai = 'INACTIVE' AND @CurrentRole = 'HRM' AND (SELECT COUNT(*) FROM TAIKHOAN tk JOIN NHANVIEN nv ON tk.MaNV = nv.MaNV WHERE tk.MaVaiTro = 'HRM' AND tk.TrangThai = 1 AND nv.TrangThai = 'ACTIVE') <= 1
+    BEGIN RAISERROR(N'Thất bại: Không thể cho nghỉ việc Trưởng phòng Nhân sự duy nhất.', 16, 1); RETURN; END
 
-IF OBJECT_ID('dbo.sp_HRManager_DeleteNhanVien', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_HRManager_DeleteNhanVien;
-GO
-CREATE PROCEDURE dbo.sp_HRManager_DeleteNhanVien
-    @MaNV VARCHAR(10)
-AS
-BEGIN
-    SET NOCOUNT ON;
+    IF @CurrentRole = 'HRM' AND @FinalRole <> 'HRM' AND (SELECT COUNT(*) FROM TAIKHOAN WHERE MaVaiTro = 'HRM' AND TrangThai = 1) <= 1
+    BEGIN RAISERROR(N'Thất bại: Không thể giáng chức Trưởng phòng Nhân sự duy nhất.', 16, 1); RETURN; END
+
+    IF @FinalRole = 'HRM' AND EXISTS (SELECT 1 FROM TAIKHOAN WHERE MaVaiTro = 'HRM' AND TrangThai = 1 AND MaNV <> @MaNV)
+    BEGIN RAISERROR(N'Thất bại: Toàn công ty chỉ được phép có DUY NHẤT 1 Trưởng phòng Nhân sự (HRM)!', 16, 1); RETURN; END
+
+    IF @FinalRole IN ('MAN', 'HRM') AND EXISTS (SELECT 1 FROM TAIKHOAN tk JOIN NHANVIEN nv ON tk.MaNV = nv.MaNV WHERE nv.MaPhong = @NewMaPhong AND tk.MaVaiTro IN ('MAN', 'HRM') AND tk.TrangThai = 1 AND tk.MaNV <> @MaNV)
+    BEGIN RAISERROR(N'Thất bại: Phòng ban mới đã có Quản lý / Trưởng phòng!', 16, 1); RETURN; END
+
     BEGIN TRANSACTION;
     BEGIN TRY
-        DELETE FROM TAIKHOAN WHERE MaNV = @MaNV;
-        DELETE FROM NHANVIEN  WHERE MaNV = @MaNV;
+        DECLARE @LuongEncrypted VARBINARY(MAX) = NULL;
+        IF @OldMaPhong IS NOT NULL EXEC dbo.sp_OpenSalaryKeyByPhong @OldMaPhong;
+        DECLARE @CurrentLuong DECIMAL(18,2);
+        SELECT @CurrentLuong = TRY_CONVERT(DECIMAL(18,2), CONVERT(VARCHAR(50), DecryptByKey(LuongEncrypted, 1, CONVERT(VARCHAR(10), @MaNV)))) FROM NHANVIEN WHERE MaNV = @MaNV;
+        IF @OldMaPhong IS NOT NULL EXEC dbo.sp_CloseSalaryKeyByPhong @OldMaPhong;
+
+        DECLARE @LuongLuu DECIMAL(18,2) = COALESCE(@Luong, @CurrentLuong);
+        IF @LuongLuu IS NOT NULL
+        BEGIN
+            EXEC dbo.sp_OpenSalaryKeyByPhong @NewMaPhong;
+            SET @LuongEncrypted = EncryptByKey(Key_GUID('SymKey_' + @NewMaPhong), CONVERT(VARCHAR(50), @LuongLuu), 1, CONVERT(VARCHAR(10), @MaNV));
+            EXEC dbo.sp_CloseSalaryKeyByPhong @NewMaPhong;
+        END
+
+        UPDATE NHANVIEN 
+        SET HoTen = COALESCE(@HoTen, HoTen), NgaySinh = COALESCE(@NgaySinh, NgaySinh), Email = COALESCE(@Email, Email), SoDienThoai = COALESCE(@SoDienThoai, SoDienThoai), GioiTinh = COALESCE(@GioiTinh, GioiTinh), DiaChi = COALESCE(@DiaChi, DiaChi), CCCD = COALESCE(@CCCD, CCCD), MaPhong = @NewMaPhong, ChucVu = COALESCE(@ChucVu, ChucVu), LoaiNhanVien = COALESCE(@LoaiNhanVien, LoaiNhanVien), TrangThai = @FinalTrangThai, NgayVaoLam = COALESCE(@NgayVaoLam, NgayVaoLam), LuongEncrypted = COALESCE(@LuongEncrypted, LuongEncrypted), MaSoThue = COALESCE(@MaSoThue, MaSoThue), AvatarUrl = COALESCE(@AvatarUrl, AvatarUrl), UpdatedAt = GETDATE() 
+        WHERE MaNV = @MaNV;
+
+        IF @MaVaiTro IS NOT NULL UPDATE TAIKHOAN SET MaVaiTro = @MaVaiTro WHERE MaNV = @MaNV;
+
+        IF @FinalTrangThai = 'INACTIVE' UPDATE TAIKHOAN SET TrangThai = 0 WHERE MaNV = @MaNV;
+        IF @FinalTrangThai = 'ACTIVE' UPDATE TAIKHOAN SET TrangThai = 1 WHERE MaNV = @MaNV;
+
+        UPDATE PHONGBAN SET MaTruongPhong = NULL WHERE MaTruongPhong = @MaNV;
+        IF @FinalRole IN ('MAN', 'HRM') AND @FinalTrangThai = 'ACTIVE'
+            UPDATE PHONGBAN SET MaTruongPhong = @MaNV WHERE MaPhong = @NewMaPhong;
+
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
-        ROLLBACK TRANSACTION;
+        IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
         DECLARE @Err NVARCHAR(4000) = ERROR_MESSAGE();
         RAISERROR(@Err, 16, 1);
     END CATCH
 END;
 GO
 
-IF OBJECT_ID('dbo.sp_HRManager_XemNhatKy', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_HRManager_XemNhatKy;
-GO
-CREATE PROCEDURE dbo.sp_HRManager_XemNhatKy
-    @TuNgay  DATE = NULL,
-    @DenNgay DATE = NULL,
-    @MaNV    VARCHAR(10) = NULL
+CREATE PROCEDURE dbo.sp_HR_InsertNhanVien
+    @MaNV_Input    VARCHAR(10),
+    @MaNV          VARCHAR(10),
+    @HoTen         NVARCHAR(100),
+    @NgaySinh      DATE = NULL,
+    @Email         VARCHAR(100) = NULL,
+    @SoDienThoai   VARCHAR(15) = NULL,
+    @GioiTinh      VARCHAR(10) = NULL,
+    @DiaChi        NVARCHAR(255) = NULL,
+    @CCCD          VARCHAR(20) = NULL,
+    @MaPhong       VARCHAR(10),
+    @ChucVu        NVARCHAR(100) = NULL,
+    @LoaiNhanVien  VARCHAR(20) = 'FULLTIME',
+    @TrangThai     VARCHAR(20) = 'ACTIVE',
+    @NgayVaoLam    DATE = NULL,
+    @Luong         DECIMAL(18,2) = NULL,
+    @MaSoThue      VARCHAR(20) = NULL,
+    @AvatarUrl     NVARCHAR(500) = NULL,
+    @TenDangNhap   VARCHAR(50),
+    @MatKhau       VARCHAR(100)
+WITH EXECUTE AS OWNER
 AS
 BEGIN
     SET NOCOUNT ON;
-    SELECT nk.MaNK AS MaLog, nk.MaNV_ThucHien AS ActorId, nv.HoTen AS ActorName, tk.TenDangNhap,
-           nk.HanhDong, nk.BangBiTacDong AS TableName, nk.HangBiThayDoi AS TargetId,
-           nvTarget.HoTen AS TargetName, nk.CotBiThayDoi, nk.GiaTriCu, nk.GiaTriMoi,
-           CONCAT(nk.HanhDong, N' ', nk.CotBiThayDoi, N' của ', nk.HangBiThayDoi) AS NoiDung,
-           nk.ThoiGian
+
+    DECLARE @MaPhongHR VARCHAR(10);
+    SELECT @MaPhongHR = MaPhong FROM NHANVIEN WHERE MaNV = @MaNV_Input;
+
+    IF @MaPhong = @MaPhongHR
+    BEGIN
+        RAISERROR(N'Khong duoc them nhan vien vao phong HR', 16, 1);
+        RETURN;
+    END
+
+    EXEC dbo.sp_HRManager_InsertNhanVien
+        @MaNV, @HoTen, @NgaySinh, @Email, @SoDienThoai, @GioiTinh, @DiaChi, @CCCD,
+        @MaPhong, @ChucVu, @LoaiNhanVien, @TrangThai, @NgayVaoLam, @Luong,
+        @MaSoThue, @AvatarUrl, @TenDangNhap, @MatKhau, 'EMP';
+END;
+GO
+
+CREATE PROCEDURE dbo.sp_HR_UpdateNhanVien
+    @MaNV_Input    VARCHAR(10),
+    @MaNV          VARCHAR(10),
+    @HoTen         NVARCHAR(100) = NULL,
+    @NgaySinh      DATE = NULL,
+    @Email         VARCHAR(100) = NULL,
+    @SoDienThoai   VARCHAR(15) = NULL,
+    @GioiTinh      VARCHAR(10) = NULL,
+    @DiaChi        NVARCHAR(255) = NULL,
+    @CCCD          VARCHAR(20) = NULL,
+    @MaPhong       VARCHAR(10) = NULL,
+    @ChucVu        NVARCHAR(100) = NULL,
+    @LoaiNhanVien  VARCHAR(20) = NULL,
+    @TrangThai     VARCHAR(20) = NULL,
+    @NgayVaoLam    DATE = NULL,
+    @Luong         DECIMAL(18,2) = NULL,
+    @MaSoThue      VARCHAR(20) = NULL,
+    @AvatarUrl     NVARCHAR(500) = NULL
+WITH EXECUTE AS OWNER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @MaPhongHR VARCHAR(10);
+    SELECT @MaPhongHR = MaPhong FROM NHANVIEN WHERE MaNV = @MaNV_Input;
+
+    IF EXISTS (SELECT 1 FROM NHANVIEN WHERE MaNV = @MaNV AND MaPhong = @MaPhongHR)
+    BEGIN
+        RAISERROR(N'Khong duoc phep sua nhan vien cung phong HR', 16, 1);
+        RETURN;
+    END
+
+    EXEC dbo.sp_HRManager_UpdateNhanVien
+        @MaNV, @HoTen, @NgaySinh, @Email, @SoDienThoai, @GioiTinh, @DiaChi, @CCCD,
+        @MaPhong, @ChucVu, @LoaiNhanVien, @TrangThai, @NgayVaoLam, @Luong,
+        @MaSoThue, @AvatarUrl, NULL;
+END;
+GO
+
+IF OBJECT_ID('dbo.sp_HRManager_DeleteNhanVien', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.sp_HRManager_DeleteNhanVien;
+GO
+
+CREATE PROCEDURE dbo.sp_HRManager_DeleteNhanVien
+    @MaNV VARCHAR(10)
+WITH EXECUTE AS OWNER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @MaVaiTro VARCHAR(10);
+    DECLARE @MaPhong VARCHAR(10);
+
+    SELECT
+        @MaVaiTro = tk.MaVaiTro,
+        @MaPhong = nv.MaPhong
+    FROM NHANVIEN nv
+    LEFT JOIN TAIKHOAN tk ON nv.MaNV = tk.MaNV
+    WHERE nv.MaNV = @MaNV;
+
+    IF @MaVaiTro IS NULL
+    BEGIN
+        RAISERROR(N'Nhân viên hoặc tài khoản không tồn tại.', 16, 1);
+        RETURN;
+    END
+
+    IF @MaVaiTro = 'HRM'
+       AND (
+            SELECT COUNT(*)
+            FROM TAIKHOAN
+            WHERE MaVaiTro = 'HRM'
+              AND TrangThai = 1
+       ) <= 1
+    BEGIN
+        RAISERROR(N'Thất bại: Không thể xóa Trưởng phòng Nhân sự duy nhất đang hoạt động của hệ thống!', 16, 1);
+        RETURN;
+    END
+
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        UPDATE PHONGBAN
+        SET MaTruongPhong = NULL
+        WHERE MaTruongPhong = @MaNV;
+
+        DELETE FROM TAIKHOAN
+        WHERE MaNV = @MaNV;
+
+        DELETE FROM NHANVIEN
+        WHERE MaNV = @MaNV;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE() <> 0
+            ROLLBACK TRANSACTION;
+
+        DECLARE @Err NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR(@Err, 16, 1);
+    END CATCH
+END;
+GO
+
+
+IF OBJECT_ID('dbo.sp_HR_DeleteNhanVien', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.sp_HR_DeleteNhanVien;
+GO
+
+CREATE PROCEDURE dbo.sp_HR_DeleteNhanVien
+    @MaNV_Input VARCHAR(10),
+    @MaNV       VARCHAR(10)
+WITH EXECUTE AS OWNER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @MaPhongHR VARCHAR(10);
+    DECLARE @MaPhongTarget VARCHAR(10);
+    DECLARE @RoleTarget VARCHAR(10);
+
+    SELECT @MaPhongHR = MaPhong
+    FROM NHANVIEN
+    WHERE MaNV = @MaNV_Input;
+
+    SELECT 
+        @MaPhongTarget = nv.MaPhong,
+        @RoleTarget = tk.MaVaiTro
+    FROM NHANVIEN nv
+    LEFT JOIN TAIKHOAN tk ON nv.MaNV = tk.MaNV
+    WHERE nv.MaNV = @MaNV;
+
+    IF @MaPhongTarget IS NULL
+    BEGIN
+        RAISERROR(N'Nhân viên cần xóa không tồn tại.', 16, 1);
+        RETURN;
+    END
+
+    IF @MaPhongTarget = @MaPhongHR
+    BEGIN
+        RAISERROR(N'Không được xóa nhân viên cùng phòng HR.', 16, 1);
+        RETURN;
+    END
+
+    IF @RoleTarget IN ('MAN', 'HRM')
+    BEGIN
+        RAISERROR(N'HR Staff không được xóa Quản lý / Trưởng phòng. Vui lòng liên hệ Trưởng phòng Nhân sự.', 16, 1);
+        RETURN;
+    END
+
+    EXEC dbo.sp_HRManager_DeleteNhanVien @MaNV;
+END;
+GO
+
+CREATE PROCEDURE dbo.sp_HRManager_XemNhatKy
+    @TuNgay DATE = NULL,
+    @DenNgay DATE = NULL,
+    @MaNV VARCHAR(10) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT 
+        nk.MaNK AS MaLog, 
+        nk.MaNV_ThucHien AS ActorId, 
+        nv.HoTen AS ActorName,
+        tk.TenDangNhap, 
+        nk.HanhDong, 
+        nk.BangBiTacDong AS TableName,
+        nk.HangBiThayDoi AS TargetId, 
+
+        COALESCE(
+            nvTarget.HoTen, 
+            CASE 
+                WHEN nk.HanhDong = 'DELETE' AND nk.GiaTriCu IS NOT NULL 
+                THEN SUBSTRING(nk.GiaTriCu, 1, ISNULL(NULLIF(CHARINDEX(' |', nk.GiaTriCu), 0) - 1, LEN(nk.GiaTriCu)))
+                ELSE N'Hệ thống / Đã xóa' 
+            END
+        ) AS TargetName,
+
+        nk.CotBiThayDoi, 
+        nk.GiaTriCu, 
+        nk.GiaTriMoi,
+        CONCAT(nk.HanhDong, N' ', nk.CotBiThayDoi, N' của ', nk.HangBiThayDoi) AS NoiDung,
+        nk.ThoiGian
     FROM NHATKY nk
     LEFT JOIN NHANVIEN nv ON nk.MaNV_ThucHien = nv.MaNV
     LEFT JOIN TAIKHOAN tk ON nk.MaNV_ThucHien = tk.MaNV
@@ -712,9 +992,21 @@ CREATE PROCEDURE dbo.sp_HRManager_XemTaiKhoan
 AS
 BEGIN
     SET NOCOUNT ON;
+
     SELECT tk.TenDangNhap, nv.MaNV, nv.HoTen, nv.Email, nv.SoDienThoai, nv.MaPhong,
-           pb.TenPhong AS TenPhongBan, tk.MaVaiTro, vt.TenVaiTro, tk.TrangThai,
-           CAST(CASE WHEN tk.TrangThai = 1 THEN 0 ELSE 1 END AS BIT) AS IsLocked,
+           pb.TenPhong AS TenPhongBan, tk.MaVaiTro, vt.TenVaiTro,
+
+           CAST(CASE 
+               WHEN tk.TrangThai = 1 AND nv.TrangThai = 'ACTIVE' THEN 1 
+               ELSE 0 
+           END AS BIT) AS TrangThai,
+
+           CAST(CASE 
+               WHEN tk.TrangThai = 1 AND nv.TrangThai = 'ACTIVE' THEN 0 
+               ELSE 1 
+           END AS BIT) AS IsLocked,
+
+           nv.TrangThai AS TrangThaiNhanVien,
            tk.CreatedAt, tk.LastLogin, tk.FailedLoginAttempts
     FROM TAIKHOAN tk
     JOIN NHANVIEN nv ON tk.MaNV = nv.MaNV
@@ -728,10 +1020,24 @@ IF OBJECT_ID('dbo.sp_HRManager_DoiTrangThaiTaiKhoan', 'P') IS NOT NULL DROP PROC
 GO
 CREATE PROCEDURE dbo.sp_HRManager_DoiTrangThaiTaiKhoan
     @TenDangNhap VARCHAR(50),
-    @TrangThai   BIT
+    @TrangThai BIT
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    IF @TrangThai = 0 
+    BEGIN
+        DECLARE @RoleCheck VARCHAR(10);
+        SELECT @RoleCheck = MaVaiTro FROM TAIKHOAN WHERE TenDangNhap = @TenDangNhap;
+        
+        IF @RoleCheck = 'HRM' 
+           AND (SELECT COUNT(*) FROM TAIKHOAN WHERE MaVaiTro = 'HRM' AND TrangThai = 1) <= 1
+        BEGIN
+            RAISERROR(N'Thất bại: Không thể khóa tài khoản Trưởng phòng Nhân sự duy nhất của hệ thống!', 16, 1);
+            RETURN;
+        END
+    END
+
     UPDATE TAIKHOAN SET TrangThai = @TrangThai WHERE TenDangNhap = @TenDangNhap;
 END;
 GO
@@ -741,22 +1047,87 @@ GO
 CREATE PROCEDURE dbo.sp_HRManager_DoiVaiTro
     @TenDangNhap VARCHAR(50),
     @MaVaiTroMoi VARCHAR(10)
+WITH EXECUTE AS OWNER
 AS
 BEGIN
     SET NOCOUNT ON;
-    IF NOT EXISTS (SELECT 1 FROM VAITRO WHERE MaVaiTro = @MaVaiTroMoi)
-    BEGIN
-        RAISERROR(N'MaVaiTro khong ton tai', 16, 1);
-        RETURN;
-    END
-    UPDATE TAIKHOAN SET MaVaiTro = @MaVaiTroMoi WHERE TenDangNhap = @TenDangNhap;
+    DECLARE @MaNV VARCHAR(10), @MaPhong VARCHAR(10), @OldRole VARCHAR(10);
+
+    SELECT @MaNV = tk.MaNV, @MaPhong = nv.MaPhong, @OldRole = tk.MaVaiTro 
+    FROM TAIKHOAN tk JOIN NHANVIEN nv ON tk.MaNV = nv.MaNV WHERE tk.TenDangNhap = @TenDangNhap;
+
+    IF @MaNV IS NULL BEGIN RAISERROR(N'Tài khoản không tồn tại.', 16, 1); RETURN; END
+    IF NOT EXISTS (SELECT 1 FROM VAITRO WHERE MaVaiTro = @MaVaiTroMoi) BEGIN RAISERROR(N'Mã vai trò không tồn tại.', 16, 1); RETURN; END
+
+    IF @MaVaiTroMoi = 'HRM' AND EXISTS (SELECT 1 FROM TAIKHOAN WHERE MaVaiTro = 'HRM' AND TrangThai = 1 AND MaNV <> @MaNV)
+    BEGIN RAISERROR(N'Thất bại: Hệ thống chỉ được có 1 Trưởng phòng Nhân sự (HRM) đang hoạt động.', 16, 1); RETURN; END
+
+    IF @OldRole = 'HRM' AND @MaVaiTroMoi <> 'HRM' AND (SELECT COUNT(*) FROM TAIKHOAN WHERE MaVaiTro = 'HRM' AND TrangThai = 1) <= 1
+    BEGIN RAISERROR(N'Thất bại: Không thể giáng chức Trưởng phòng Nhân sự duy nhất.', 16, 1); RETURN; END
+
+    IF @MaVaiTroMoi IN ('MAN', 'HRM') AND EXISTS (
+        SELECT 1 FROM TAIKHOAN tk JOIN NHANVIEN nv ON tk.MaNV = nv.MaNV 
+        WHERE nv.MaPhong = @MaPhong AND tk.MaVaiTro IN ('MAN', 'HRM') AND tk.TrangThai = 1 AND tk.MaNV <> @MaNV
+    )
+    BEGIN RAISERROR(N'Thất bại: Phòng ban này đã có Trưởng phòng.', 16, 1); RETURN; END
+
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        UPDATE TAIKHOAN SET MaVaiTro = @MaVaiTroMoi WHERE TenDangNhap = @TenDangNhap;
+
+        UPDATE PHONGBAN SET MaTruongPhong = NULL WHERE MaTruongPhong = @MaNV;
+        IF @MaVaiTroMoi IN ('MAN', 'HRM') UPDATE PHONGBAN SET MaTruongPhong = @MaNV WHERE MaPhong = @MaPhong;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE() <> 0 ROLLBACK TRANSACTION;
+        DECLARE @Err NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR(@Err, 16, 1);
+    END CATCH
 END;
 GO
 
+IF OBJECT_ID('dbo.sp_Auth_DoiMatKhau', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.sp_Auth_DoiMatKhau;
+GO
+
+CREATE PROCEDURE dbo.sp_Auth_DoiMatKhau
+    @MaNV        VARCHAR(10),
+    @MatKhauCu   VARCHAR(100),
+    @MatKhauMoi  VARCHAR(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM TAIKHOAN tk
+        JOIN NHANVIEN nv ON tk.MaNV = nv.MaNV
+        WHERE tk.MaNV = @MaNV
+          AND tk.MatKhauHash = HASHBYTES('SHA2_256', @MatKhauCu)
+          AND tk.TrangThai = 1
+          AND nv.TrangThai = 'ACTIVE'
+    )
+    BEGIN
+        RAISERROR(N'Mật khẩu cũ không chính xác hoặc tài khoản không còn hoạt động', 16, 1);
+        RETURN;
+    END
+
+    UPDATE TAIKHOAN
+    SET MatKhauHash = HASHBYTES('SHA2_256', @MatKhauMoi),
+        FailedLoginAttempts = 0
+    WHERE MaNV = @MaNV;
+
+    SELECT 'Success' AS Status,
+           N'Đổi mật khẩu thành công' AS Message;
+END;
+GO
 
 -- ============================================================
--- BUOC 10: Trigger Audit Log
+-- BUOC 10: Trigger Audit Log 
 -- ============================================================
+
 IF OBJECT_ID('dbo.trg_NhanVien_Update', 'TR') IS NOT NULL DROP TRIGGER dbo.trg_NhanVien_Update;
 GO
 CREATE TRIGGER dbo.trg_NhanVien_Update
@@ -765,6 +1136,8 @@ AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    -- 1. 
     IF UPDATE(HoTen)
         INSERT INTO NHATKY (MaNV_ThucHien, HanhDong, BangBiTacDong, HangBiThayDoi, CotBiThayDoi, GiaTriCu, GiaTriMoi)
         SELECT dbo.fn_GetCurrentMaNV(), 'UPDATE', 'NHANVIEN', i.MaNV, 'HoTen', d.HoTen, i.HoTen
@@ -805,33 +1178,21 @@ BEGIN
         SELECT dbo.fn_GetCurrentMaNV(), 'UPDATE', 'NHANVIEN', i.MaNV, 'ChucVu', d.ChucVu, i.ChucVu
         FROM inserted i JOIN deleted d ON i.MaNV = d.MaNV WHERE ISNULL(i.ChucVu,'') <> ISNULL(d.ChucVu,'');
 
-    IF UPDATE(LoaiNhanVien)
-        INSERT INTO NHATKY (MaNV_ThucHien, HanhDong, BangBiTacDong, HangBiThayDoi, CotBiThayDoi, GiaTriCu, GiaTriMoi)
-        SELECT dbo.fn_GetCurrentMaNV(), 'UPDATE', 'NHANVIEN', i.MaNV, 'LoaiNhanVien', d.LoaiNhanVien, i.LoaiNhanVien
-        FROM inserted i JOIN deleted d ON i.MaNV = d.MaNV WHERE ISNULL(i.LoaiNhanVien,'') <> ISNULL(d.LoaiNhanVien,'');
-
     IF UPDATE(TrangThai)
         INSERT INTO NHATKY (MaNV_ThucHien, HanhDong, BangBiTacDong, HangBiThayDoi, CotBiThayDoi, GiaTriCu, GiaTriMoi)
         SELECT dbo.fn_GetCurrentMaNV(), 'UPDATE', 'NHANVIEN', i.MaNV, 'TrangThai', d.TrangThai, i.TrangThai
         FROM inserted i JOIN deleted d ON i.MaNV = d.MaNV WHERE ISNULL(i.TrangThai,'') <> ISNULL(d.TrangThai,'');
 
-    IF UPDATE(NgayVaoLam)
+    IF UPDATE(LuongEncrypted)
         INSERT INTO NHATKY (MaNV_ThucHien, HanhDong, BangBiTacDong, HangBiThayDoi, CotBiThayDoi, GiaTriCu, GiaTriMoi)
-        SELECT dbo.fn_GetCurrentMaNV(), 'UPDATE', 'NHANVIEN', i.MaNV, 'NgayVaoLam', CONVERT(NVARCHAR(30), d.NgayVaoLam), CONVERT(NVARCHAR(30), i.NgayVaoLam)
-        FROM inserted i JOIN deleted d ON i.MaNV = d.MaNV WHERE ISNULL(CONVERT(NVARCHAR(30), i.NgayVaoLam),'') <> ISNULL(CONVERT(NVARCHAR(30), d.NgayVaoLam),'');
+        SELECT dbo.fn_GetCurrentMaNV(), 'UPDATE', 'NHANVIEN', i.MaNV, 'Luong', N'[ĐÃ MÃ HÓA]', N'[ĐÃ MÃ HÓA]'
+        FROM inserted i JOIN deleted d ON i.MaNV = d.MaNV
+        WHERE ISNULL(i.LuongEncrypted, 0x) <> ISNULL(d.LuongEncrypted, 0x);
 
-    IF UPDATE(Luong)
-        INSERT INTO NHATKY (MaNV_ThucHien, HanhDong, BangBiTacDong, HangBiThayDoi, CotBiThayDoi, GiaTriCu, GiaTriMoi)
-        SELECT dbo.fn_GetCurrentMaNV(), 'UPDATE', 'NHANVIEN', i.MaNV, 'Luong', CAST(d.Luong AS NVARCHAR), CAST(i.Luong AS NVARCHAR)
-        FROM inserted i JOIN deleted d ON i.MaNV = d.MaNV WHERE ISNULL(i.Luong,0) <> ISNULL(d.Luong,0);
-
-    IF UPDATE(MaSoThue)
-        INSERT INTO NHATKY (MaNV_ThucHien, HanhDong, BangBiTacDong, HangBiThayDoi, CotBiThayDoi, GiaTriCu, GiaTriMoi)
-        SELECT dbo.fn_GetCurrentMaNV(), 'UPDATE', 'NHANVIEN', i.MaNV, 'MaSoThue', d.MaSoThue, i.MaSoThue
-        FROM inserted i JOIN deleted d ON i.MaNV = d.MaNV WHERE ISNULL(i.MaSoThue,'') <> ISNULL(d.MaSoThue,'');
 END;
 GO
 
+-- 3. Trigger xoa và them 
 IF OBJECT_ID('dbo.trg_NhanVien_Delete', 'TR') IS NOT NULL DROP TRIGGER dbo.trg_NhanVien_Delete;
 GO
 CREATE TRIGGER dbo.trg_NhanVien_Delete
@@ -862,33 +1223,51 @@ BEGIN
 END;
 GO
 
-IF OBJECT_ID('dbo.sp_Auth_DoiMatKhau', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_Auth_DoiMatKhau;
+-- 4. trigger khoa/mo tk 
+IF OBJECT_ID('TRG_Audit_TaiKhoan', 'TR') IS NOT NULL DROP TRIGGER TRG_Audit_TaiKhoan;
 GO
 
--- Đổi mật khẩu
-CREATE PROCEDURE dbo.sp_Auth_DoiMatKhau
-    @MaNV VARCHAR(10),
-    @MatKhauCu VARCHAR(100),
-    @MatKhauMoi VARCHAR(100)
+CREATE TRIGGER TRG_Audit_TaiKhoan
+ON TAIKHOAN
+AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     
-    -- Kiểm tra mật khẩu cũ có khớp không
-    IF EXISTS (
-        SELECT 1 FROM TAIKHOAN 
-        WHERE MaNV = @MaNV AND MatKhauHash = HASHBYTES('SHA2_256', @MatKhauCu)
-    )
+    DECLARE @MaNV_ThucHien VARCHAR(10) = CAST(SESSION_CONTEXT(N'MaNV') AS VARCHAR(10));
+
+    IF @MaNV_ThucHien IS NULL SET @MaNV_ThucHien = 'HỆ THỐNG';
+
+    IF UPDATE(MaVaiTro)
     BEGIN
-        UPDATE TAIKHOAN 
-        SET MatKhauHash = HASHBYTES('SHA2_256', @MatKhauMoi)
-        WHERE MaNV = @MaNV;
-        
-        SELECT 'Success' AS Status;
+        INSERT INTO NHATKY (MaNV_ThucHien, HanhDong, BangBiTacDong, HangBiThayDoi, CotBiThayDoi, GiaTriCu, GiaTriMoi)
+        SELECT 
+            @MaNV_ThucHien, 
+            'ROLE', 
+            'TAIKHOAN', 
+            i.MaNV, 
+            'MaVaiTro', 
+            d.MaVaiTro, 
+            i.MaVaiTro
+        FROM inserted i
+        JOIN deleted d ON i.TenDangNhap = d.TenDangNhap
+        WHERE i.MaVaiTro <> d.MaVaiTro; 
     END
-    ELSE
+
+    IF UPDATE(TrangThai)
     BEGIN
-        RAISERROR(N'Mật khẩu cũ không chính xác', 16, 1);
+        INSERT INTO NHATKY (MaNV_ThucHien, HanhDong, BangBiTacDong, HangBiThayDoi, CotBiThayDoi, GiaTriCu, GiaTriMoi)
+        SELECT 
+            @MaNV_ThucHien, 
+            CASE WHEN i.TrangThai = 0 THEN 'LOCK_ACCOUNT' ELSE 'UPDATE' END, 
+            'TAIKHOAN', 
+            i.MaNV, 
+            'TrangThai', 
+            CAST(d.TrangThai AS VARCHAR(5)), 
+            CAST(i.TrangThai AS VARCHAR(5))
+        FROM inserted i
+        JOIN deleted d ON i.TenDangNhap = d.TenDangNhap
+        WHERE i.TrangThai <> d.TrangThai;
     END
 END;
 GO
@@ -896,43 +1275,41 @@ GO
 -- ============================================================
 -- BUOC 11: Cap quyen EXECUTE cho tung Role
 -- ============================================================
-
 -- Role_Employee
-GRANT EXECUTE ON dbo.sp_Auth_Me                       TO Role_Employee;
-GRANT EXECUTE ON dbo.sp_Employee_XemThongTinCaNhan    TO Role_Employee;
+GRANT EXECUTE ON dbo.sp_Auth_Me TO Role_Employee;
+GRANT EXECUTE ON dbo.sp_Employee_XemThongTinCaNhan TO Role_Employee;
 GRANT EXECUTE ON dbo.sp_Employee_XemNhanVienCungPhong TO Role_Employee;
 
 -- Role_Manager 
-GRANT EXECUTE ON dbo.sp_Auth_Me                       TO Role_Manager;
-GRANT EXECUTE ON dbo.sp_Employee_XemThongTinCaNhan    TO Role_Manager;
-GRANT EXECUTE ON dbo.sp_Manager_XemNhanVienCungPhong  TO Role_Manager;
+GRANT EXECUTE ON dbo.sp_Auth_Me TO Role_Manager;
+GRANT EXECUTE ON dbo.sp_Employee_XemThongTinCaNhan TO Role_Manager;
+GRANT EXECUTE ON dbo.sp_Manager_XemNhanVienCungPhong TO Role_Manager;
 
 -- Role_Finance 
-GRANT EXECUTE ON dbo.sp_Auth_Me                       TO Role_Finance;
-GRANT EXECUTE ON dbo.sp_Employee_XemThongTinCaNhan    TO Role_Finance;
+GRANT EXECUTE ON dbo.sp_Auth_Me TO Role_Finance;
+GRANT EXECUTE ON dbo.sp_Employee_XemThongTinCaNhan TO Role_Finance;
 GRANT EXECUTE ON dbo.sp_Employee_XemNhanVienCungPhong TO Role_Finance;
-GRANT EXECUTE ON dbo.sp_Finance_XemLuongCongTy        TO Role_Finance;
+GRANT EXECUTE ON dbo.sp_Finance_XemLuongCongTy TO Role_Finance;
 
 -- Role_HR_Staff 
-GRANT EXECUTE ON dbo.sp_Auth_Me                       TO Role_HR_Staff;
-GRANT EXECUTE ON dbo.sp_Employee_XemThongTinCaNhan    TO Role_HR_Staff;
-GRANT EXECUTE ON dbo.sp_HR_XemNhanVienNgoaiPhong      TO Role_HR_Staff;
-GRANT EXECUTE ON dbo.sp_HR_InsertNhanVien             TO Role_HR_Staff;
-GRANT EXECUTE ON dbo.sp_HR_UpdateNhanVien             TO Role_HR_Staff;
-GRANT EXECUTE ON dbo.sp_HR_DeleteNhanVien             TO Role_HR_Staff;
+GRANT EXECUTE ON dbo.sp_Auth_Me TO Role_HR_Staff;
+GRANT EXECUTE ON dbo.sp_Employee_XemThongTinCaNhan TO Role_HR_Staff;
+GRANT EXECUTE ON dbo.sp_HR_XemNhanVienNgoaiPhong TO Role_HR_Staff;
+GRANT EXECUTE ON dbo.sp_HR_InsertNhanVien TO Role_HR_Staff;
+GRANT EXECUTE ON dbo.sp_HR_UpdateNhanVien TO Role_HR_Staff;
+GRANT EXECUTE ON dbo.sp_HR_DeleteNhanVien TO Role_HR_Staff;
 
 -- Role_HR_Manager 
-GRANT EXECUTE ON dbo.sp_Auth_Me                       TO Role_HR_Manager;
-GRANT EXECUTE ON dbo.sp_Employee_XemThongTinCaNhan    TO Role_HR_Manager;
-GRANT EXECUTE ON dbo.sp_HRManager_XemTatCaNhanVien    TO Role_HR_Manager;
-GRANT EXECUTE ON dbo.sp_HRManager_InsertNhanVien      TO Role_HR_Manager;
-GRANT EXECUTE ON dbo.sp_HRManager_UpdateNhanVien      TO Role_HR_Manager;
-GRANT EXECUTE ON dbo.sp_HRManager_DeleteNhanVien      TO Role_HR_Manager;
-GRANT EXECUTE ON dbo.sp_HRManager_XemNhatKy           TO Role_HR_Manager;
+GRANT EXECUTE ON dbo.sp_Auth_Me TO Role_HR_Manager;
+GRANT EXECUTE ON dbo.sp_Employee_XemThongTinCaNhan TO Role_HR_Manager;
+GRANT EXECUTE ON dbo.sp_HRManager_XemTatCaNhanVien TO Role_HR_Manager;
+GRANT EXECUTE ON dbo.sp_HRManager_InsertNhanVien TO Role_HR_Manager;
+GRANT EXECUTE ON dbo.sp_HRManager_UpdateNhanVien TO Role_HR_Manager;
+GRANT EXECUTE ON dbo.sp_HRManager_DeleteNhanVien TO Role_HR_Manager;
+GRANT EXECUTE ON dbo.sp_HRManager_XemNhatKy TO Role_HR_Manager;
 GRANT EXECUTE ON dbo.sp_HRManager_DoiTrangThaiTaiKhoan TO Role_HR_Manager;
-GRANT EXECUTE ON dbo.sp_HRManager_DoiVaiTro           TO Role_HR_Manager;
-GRANT EXECUTE ON dbo.sp_HRManager_XemTaiKhoan         TO Role_HR_Manager;
-GO
+GRANT EXECUTE ON dbo.sp_HRManager_DoiVaiTro TO Role_HR_Manager;
+GRANT EXECUTE ON dbo.sp_HRManager_XemTaiKhoan TO Role_HR_Manager;
 
 -- Cấp quyền thực thi procedure cho tất cả các Role
 GRANT EXECUTE ON dbo.sp_Auth_DoiMatKhau TO Role_Employee;
@@ -943,6 +1320,13 @@ GRANT EXECUTE ON dbo.sp_Auth_DoiMatKhau TO Role_HR_Manager;
 
 -- Quyen cho test_user (NodeJS connect)
 GRANT EXECUTE ON dbo.sp_Auth_Login TO test_user;
-GRANT EXECUTE ON dbo.sp_Auth_Me    TO test_user;
+GRANT EXECUTE ON dbo.sp_Auth_Me TO test_user;
 GRANT EXECUTE ON dbo.sp_Auth_DoiMatKhau TO test_user;
 GO
+
+GRANT EXECUTE ON dbo.sp_OpenSalaryKeyByPhong TO Role_Manager;
+GRANT EXECUTE ON dbo.sp_CloseSalaryKeyByPhong TO Role_Manager;
+GRANT EXECUTE ON dbo.sp_OpenAllSalaryKeys TO Role_Finance;
+GRANT EXECUTE ON dbo.sp_CloseAllSalaryKeys TO Role_Finance;
+GRANT EXECUTE ON dbo.sp_OpenAllSalaryKeys TO Role_HR_Manager;
+GRANT EXECUTE ON dbo.sp_CloseAllSalaryKeys TO Role_HR_Manager;

@@ -40,12 +40,23 @@ const addOtherEmployee = async (req, res) => {
     const MaNV = pick(req.body, ['MaNV', 'maNV']);
     const HoTen = pick(req.body, ['HoTen', 'hoTen']);
     const MaPhong = pick(req.body, ['MaPhong', 'maPhong', 'phongBanId']);
-    const TenDangNhap = pick(req.body, ['TenDangNhap', 'tenDangNhap', 'username']);
+    
+    let TenDangNhap = pick(req.body, ['TenDangNhap', 'tenDangNhap', 'username']);
     const MatKhau = pick(req.body, ['MatKhau', 'matKhau', 'password'], '123456');
 
-    if (!MaNV || !HoTen || !MaPhong || !TenDangNhap) {
-        return res.status(400).json({ message: 'Vui lòng nhập MaNV, HoTen, MaPhong và TenDangNhap' });
+    if (!MaNV || !HoTen || !MaPhong) {
+        return res.status(400).json({ message: 'Vui lòng nhập MaNV, HoTen, MaPhong' });
     }
+
+    if (!TenDangNhap) {
+        const Email = pick(req.body, ['Email', 'email']);
+        if (Email) {
+            TenDangNhap = Email.split('@')[0]; 
+        } else {
+            TenDangNhap = MaNV.toLowerCase(); 
+        }
+    }
+    // ------------------------------------------
 
     try {
         await db.executeSP('sp_HR_InsertNhanVien', [
@@ -58,6 +69,9 @@ const addOtherEmployee = async (req, res) => {
 
         res.status(201).json({ message: 'Thêm nhân viên thành công' });
     } catch (error) {
+        if (error.number === 2601 || error.number === 2627) {
+            return res.status(400).json({ message: 'Thất bại: Email, Số điện thoại, CCCD hoặc Mã số thuế này đã tồn tại trong hệ thống!' });
+        }
         res.status(500).json({ message: 'Lỗi thêm nhân viên', error: error.message });
     }
 };
@@ -74,6 +88,9 @@ const updateOtherEmployee = async (req, res) => {
 
         res.status(200).json({ message: 'Cập nhật thành công' });
     } catch (error) {
+        if (error.number === 2601 || error.number === 2627) {
+            return res.status(400).json({ message: 'Thất bại: Email, Số điện thoại, CCCD hoặc Mã số thuế này đã bị trùng với người khác!' });
+        }
         res.status(500).json({ message: 'Lỗi cập nhật nhân viên', error: error.message });
     }
 };

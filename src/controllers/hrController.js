@@ -39,13 +39,24 @@ const addEmployeeHRM = async (req, res) => {
     const MaNV = pick(req.body, ['MaNV', 'maNV']);
     const HoTen = pick(req.body, ['HoTen', 'hoTen']);
     const MaPhong = pick(req.body, ['MaPhong', 'maPhong', 'phongBanId']);
-    const TenDangNhap = pick(req.body, ['TenDangNhap', 'tenDangNhap', 'username']);
+    
+    let TenDangNhap = pick(req.body, ['TenDangNhap', 'tenDangNhap', 'username']); 
     const MatKhau = pick(req.body, ['MatKhau', 'matKhau', 'password'], '123456');
     const MaVaiTro = pick(req.body, ['MaVaiTro', 'maVaiTro', 'role'], 'EMP');
 
-    if (!MaNV || !HoTen || !MaPhong || !TenDangNhap) {
-        return res.status(400).json({ message: 'Vui lòng nhập MaNV, HoTen, MaPhong và TenDangNhap' });
+    if (!MaNV || !HoTen || !MaPhong) {
+        return res.status(400).json({ message: 'Vui lòng nhập MaNV, HoTen, MaPhong ' });
     }
+
+    if (!TenDangNhap) {
+        const Email = pick(req.body, ['Email', 'email']);
+        if (Email) {
+            TenDangNhap = Email.split('@')[0];
+        } else {
+            TenDangNhap = MaNV.toLowerCase(); 
+        }
+    }
+    // ------------------------------------------
 
     try {
         await db.executeSP('sp_HRManager_InsertNhanVien', [
@@ -58,7 +69,10 @@ const addEmployeeHRM = async (req, res) => {
 
         res.status(201).json({ message: 'Thêm nhân viên và tài khoản thành công' });
     } catch (error) {
-        res.status(500).json({ message: 'Lỗi thêm nhân viên', error: error.message });
+        if (error.number === 2601 || error.number === 2627) {
+            return res.status(400).json({ message: 'Thất bại: Email, Số điện thoại, CCCD hoặc Mã số thuế này đã tồn tại trong hệ thống!' });
+        }
+        res.status(500).json({ message: error.message || 'Lỗi thêm nhân viên' });
     }
 };
 
@@ -75,7 +89,10 @@ const updateEmployeeHRM = async (req, res) => {
 
         res.status(200).json({ message: 'Cập nhật nhân viên thành công' });
     } catch (error) {
-        res.status(500).json({ message: 'Lỗi cập nhật', error: error.message });
+        if (error.number === 2601 || error.number === 2627) {
+            return res.status(400).json({ message: 'Thất bại: Email, Số điện thoại, CCCD hoặc Mã số thuế này đã bị trùng với người khác!' });
+        }
+        res.status(500).json({ message: error.message || 'Lỗi cập nhật' });
     }
 };
 
@@ -87,7 +104,7 @@ const deleteEmployeeHRM = async (req, res) => {
         ], req.user);
         res.status(200).json({ message: 'Đã xóa nhân viên và tài khoản' });
     } catch (error) {
-        res.status(500).json({ message: 'Lỗi khi xóa', error: error.message });
+        res.status(500).json({ message: error.message || 'Lỗi khi xóa' });
     }
 };
 
@@ -125,7 +142,7 @@ const toggleAccountStatus = async (req, res) => {
 
         res.status(200).json({ message: Boolean(TrangThai) ? 'Đã mở khóa tài khoản' : 'Đã khóa tài khoản' });
     } catch (error) {
-        res.status(500).json({ message: 'Lỗi cập nhật trạng thái tài khoản', error: error.message });
+        res.status(500).json({ message: error.message || 'Lỗi cập nhật trạng thái tài khoản' });
     }
 };
 
@@ -145,7 +162,7 @@ const changeRole = async (req, res) => {
 
         res.status(200).json({ message: 'Đã đổi vai trò thành công' });
     } catch (error) {
-        res.status(500).json({ message: 'Lỗi đổi vai trò', error: error.message });
+        res.status(500).json({ message: error.message || 'Lỗi đổi vai trò' });
     }
 };
 
