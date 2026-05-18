@@ -133,11 +133,12 @@ const toggleAccountStatus = async (req, res) => {
     if (!TenDangNhap || TrangThai === null || TrangThai === undefined) {
         return res.status(400).json({ message: 'Thiếu thông tin tài khoản hoặc trạng thái' });
     }
+    const isActivating = String(TrangThai) === 'true' || String(TrangThai) === '1';
 
     try {
         await db.executeSP('sp_HRManager_DoiTrangThaiTaiKhoan', [
             { name: 'TenDangNhap', type: db.sql.VarChar(50), value: TenDangNhap },
-            { name: 'TrangThai', type: db.sql.Bit, value: Boolean(TrangThai) }
+            { name: 'TrangThai', type: db.sql.Bit, value: isActivating }
         ], req.user);
 
         res.status(200).json({ message: Boolean(TrangThai) ? 'Đã mở khóa tài khoản' : 'Đã khóa tài khoản' });
